@@ -32,6 +32,13 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Admin',
     default: null
+  },
+
+  mustChangePassword: {
+    type: Boolean,
+    default: function() {
+      return this.role === 'admin';
+    }
   }
 }, { timestamps: true });
 

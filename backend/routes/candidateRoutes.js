@@ -4,6 +4,7 @@ import {
   getAllCandidates,
   getCandidateById,
   getCandidatesByOffer,
+  getCandidatesByUser, // 🆕 Nouvelle import
   deleteCandidate,
   deleteManyCandidates,
   getMyCandidateByOffer
@@ -24,10 +25,14 @@ router.get('/', verifyToken, getAllCandidates);
 // ⚠️ Cette route doit être avant '/:id'
 router.get("/me/:offreId", verifyToken, getMyCandidateByOffer);
 
+// 🆕 Récupérer toutes les candidatures d'un utilisateur spécifique
+// ⚠️ Cette route doit aussi être avant '/:id' pour éviter les conflits
+router.get('/user/:userId', verifyToken, getCandidatesByUser);
+
 // 🎯 Lecture des candidats liés à une offre
 router.get('/offre/:id', verifyToken, getCandidatesByOffer);
 
-// 🔎 Lecture d’un candidat par ID
+// 🔎 Lecture d'un candidat par ID
 router.get('/:id', verifyToken, getCandidateById);
 
 // ❌ Suppression individuelle

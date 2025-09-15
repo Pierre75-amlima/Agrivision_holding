@@ -14,6 +14,7 @@ import CandidaturesOffre from "./pages/candidatureOffre"; // ✅ nouvelle page
 import AllOffres from './pages/allOffres';
 import InfoPosteEntretien from './pages/infoPostEntretien';
 import TestPage from './pages/testResultPage';
+import ChangePassword from './pages/changePassword'; 
 
 
 const AppRoutes = () => {
@@ -26,7 +27,7 @@ const AppRoutes = () => {
         <Route path="/offres" element={<AllOffres />} />
         <Route path="/infoPosteEntretien/:candidatureId" element={<InfoPosteEntretien />} />
         <Route path="/testResults/:offreId" element={<TestPage />} />
-
+        <Route path="/change-password" element={<ChangePassword />} />
 
         
 

@@ -226,7 +226,7 @@ export default function CandidaturePage() {
                     <input
                       type={field === 'email' ? 'email' : 'text'}
                       name={field}
-                      id={field}
+                      id={field}CD 
                       value={formData[field]}
                       readOnly
                       className="w-full p-3 sm:p-4 border-2 border-gray-200 rounded-xl bg-gray-50 cursor-not-allowed text-gray-600 font-medium"

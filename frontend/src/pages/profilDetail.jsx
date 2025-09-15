@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/authContext";
-import { ArrowLeft, User, Mail, Phone, MapPin, Briefcase, Award, FileText, CheckCircle, Users, Calendar, Download } from "lucide-react";
+import { 
+  ArrowLeft, User, Mail, Phone, MapPin, Briefcase, Award, FileText, 
+  CheckCircle, Users, Calendar, Download 
+} from "lucide-react";
 
 export default function CandidatureDetail() {
   const navigate = useNavigate();
@@ -13,74 +16,24 @@ export default function CandidatureDetail() {
   const [testResults, setTestResults] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-  if (!token) return;
-
-  const fetchData = async () => {
-    setLoading(true);
-
-    try {
-      // 🔹 1️⃣ Récupérer la candidature
-      const resC = await fetch(`http://localhost:5000/api/candidats/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!resC.ok) throw new Error("Candidature introuvable");
-      const dataC = await resC.json();
-      setC(dataC);
-
-      const userId = dataC?.user?._id;
-
-      if (userId) {
-        // 🔹 2️⃣ Récupérer les infos post-entretien
-        try {
-          const resPost = await fetch(
-            `http://localhost:5000/api/info-post-entretien/${userId}`,
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-          if (resPost.ok) {
-            const dataPost = await resPost.json();
-            setPostEntretien(dataPost);
-          } else if (resPost.status === 404) {
-            setPostEntretien(null);
-          } else {
-            console.error("Erreur fetch post-entretien:", resPost.statusText);
-          }
-        } catch (err) {
-          console.error("Erreur fetch post-entretien:", err);
-          setPostEntretien(null);
-        }
-
-        // 🔹 3️⃣ Récupérer les résultats de tests
-        try {
-          const resTest = await fetch(
-            `http://localhost:5000/api/testResults/by-candidat/${userId}`,
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-          if (resTest.ok) {
-            const dataTest = await resTest.json();
-            setTestResults(Array.isArray(dataTest) ? dataTest : [dataTest]);
-          } else if (resTest.status === 404) {
-            setTestResults([]);
-          } else {
-            console.error("Erreur fetch testResults:", resTest.statusText);
-            setTestResults([]);
-          }
-        } catch (err) {
-          console.error("Erreur fetch testResults:", err);
-          setTestResults([]);
-        }
-      }
-    } catch (err) {
-      console.error("Erreur fetch candidature:", err);
-      setC(null);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  fetchData();
-}, [id, token]);
-
+  // Fonction pour télécharger ou ouvrir un PDF/CV
+  const downloadPdf = async (url, filename) => {
+  if (!url) return;
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob(); // Convertir en Blob
+    const blobUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.download = filename || "document.pdf";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(blobUrl);
+  } catch (err) {
+    console.error("Erreur téléchargement PDF:", err);
+  }
+};
 
   const downloadImage = (imageUrl, filename) => {
     const link = document.createElement('a');
@@ -90,6 +43,73 @@ export default function CandidatureDetail() {
     link.click();
     document.body.removeChild(link);
   };
+
+  useEffect(() => {
+    if (!token) return;
+
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        // 1️⃣ Récupérer la candidature
+        const resC = await fetch(`http://localhost:5000/api/candidats/${id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!resC.ok) throw new Error("Candidature introuvable");
+        const dataC = await resC.json();
+        setC(dataC);
+
+        const userId = dataC?.user?._id;
+
+        if (userId) {
+          // 2️⃣ Infos post-entretien
+          try {
+            const resPost = await fetch(
+              `http://localhost:5000/api/info-post-entretien/${userId}`,
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            if (resPost.ok) {
+              const dataPost = await resPost.json();
+              setPostEntretien(dataPost);
+            } else if (resPost.status === 404) {
+              setPostEntretien(null);
+            } else {
+              console.error("Erreur fetch post-entretien:", resPost.statusText);
+            }
+          } catch (err) {
+            console.error("Erreur fetch post-entretien:", err);
+            setPostEntretien(null);
+          }
+
+          // 3️⃣ Résultats de tests
+          try {
+            const resTest = await fetch(
+              `http://localhost:5000/api/testResults/by-candidat/${userId}`,
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            if (resTest.ok) {
+              const dataTest = await resTest.json();
+              setTestResults(Array.isArray(dataTest) ? dataTest : [dataTest]);
+            } else if (resTest.status === 404) {
+              setTestResults([]);
+            } else {
+              console.error("Erreur fetch testResults:", resTest.statusText);
+              setTestResults([]);
+            }
+          } catch (err) {
+            console.error("Erreur fetch testResults:", err);
+            setTestResults([]);
+          }
+        }
+      } catch (err) {
+        console.error("Erreur fetch candidature:", err);
+        setC(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [id, token]);
 
   if (loading) {
     return (
@@ -138,7 +158,7 @@ export default function CandidatureDetail() {
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-5xl mx-auto">
-        
+
         {/* Bouton retour */}
         <button
           onClick={() => navigate(-1)}
@@ -148,20 +168,18 @@ export default function CandidatureDetail() {
           <span className="text-gray-700 font-medium">Retour</span>
         </button>
 
-        {/* Header - Informations de base */}
+        {/* Header - Infos de base */}
         <div className="bg-white rounded-xl shadow-sm p-8 mb-8 border border-gray-200">
           <div className="flex items-center space-x-4 mb-6">
             <div className="w-16 h-16 bg-gradient-to-br from-[#094363] to-blue-600 rounded-full flex items-center justify-center">
               <User className="w-8 h-8 text-white" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-[#094363]">
-                {prenom} {nom}
-              </h1>
+              <h1 className="text-3xl font-bold text-[#094363]">{prenom} {nom}</h1>
               <p className="text-gray-600 text-lg">Profil candidat</p>
             </div>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
               <Mail className="w-5 h-5 text-[#094363]" />
@@ -170,7 +188,7 @@ export default function CandidatureDetail() {
                 <p className="text-gray-700">{c.user?.email || "Non renseigné"}</p>
               </div>
             </div>
-            
+
             <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
               <Phone className="w-5 h-5 text-[#094363]" />
               <div>
@@ -178,7 +196,7 @@ export default function CandidatureDetail() {
                 <p className="text-gray-700">{c.telephone || "Non renseigné"}</p>
               </div>
             </div>
-            
+
             <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg md:col-span-2 lg:col-span-1">
               <MapPin className="w-5 h-5 text-[#094363]" />
               <div>
@@ -190,28 +208,20 @@ export default function CandidatureDetail() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
-          {/* Colonne principale */}
           <div className="lg:col-span-2 space-y-8">
-            
+
             {/* Compétences */}
             <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
               <div className="flex items-center space-x-3 mb-6">
                 <Award className="w-6 h-6 text-[#094363]" />
                 <h2 className="text-xl font-semibold text-[#094363]">Compétences</h2>
               </div>
-              
               <div className="flex flex-wrap gap-3">
-                {c.competences?.length > 0 ? (
-                  c.competences.map((comp, i) => (
-                    <span 
-                      key={i} 
-                      className="px-4 py-2 bg-blue-50 text-[#094363] rounded-full font-medium border border-blue-200 hover:bg-blue-100 transition-colors"
-                    >
-                      {comp}
-                    </span>
-                  ))
-                ) : (
+                {c.competences?.length > 0 ? c.competences.map((comp, i) => (
+                  <span key={i} className="px-4 py-2 bg-blue-50 text-[#094363] rounded-full font-medium border border-blue-200 hover:bg-blue-100 transition-colors">
+                    {comp}
+                  </span>
+                )) : (
                   <div className="text-center py-8 w-full">
                     <Award className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                     <p className="text-gray-500 text-lg">Aucune compétence renseignée</p>
@@ -226,38 +236,23 @@ export default function CandidatureDetail() {
                 <Briefcase className="w-6 h-6 text-[#094363]" />
                 <h2 className="text-xl font-semibold text-[#094363]">Expériences professionnelles</h2>
               </div>
-              
               <div className="space-y-4">
-                {c.experiences?.length > 0 ? (
-                  c.experiences.map((exp, i) => (
-                    <div key={i} className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow bg-gradient-to-r from-gray-50 to-white">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        <div>
-                          <p className="font-bold text-gray-800 mb-1">Poste occupé</p>
-                          <p className="text-gray-900">{exp.poste || "Non renseigné"}</p>
-                        </div>
-                        <div>
-                          <p className="font-bold text-gray-800 mb-1">Entreprise</p>
-                          <p className="text-gray-900">{exp.societe || exp.entreprise || "Non renseignée"}</p>
-                        </div>
+                {c.experiences?.length > 0 ? c.experiences.map((exp, i) => (
+                  <div key={i} className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow bg-gradient-to-r from-gray-50 to-white">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <p className="font-bold text-gray-800 mb-1">Poste occupé</p>
+                        <p className="text-gray-900">{exp.poste || "Non renseigné"}</p>
                       </div>
-                      
-                      {exp.duree && (
-                        <div className="mb-4">
-                          <p className="font-bold text-gray-800 mb-1">Durée</p>
-                          <p className="text-gray-700">{exp.duree} mois</p>
-                        </div>
-                      )}
-                      
-                      {exp.description && (
-                        <div>
-                          <p className="font-bold text-gray-800 mb-1">Description</p>
-                          <p className="text-gray-700 leading-relaxed">{exp.description}</p>
-                        </div>
-                      )}
+                      <div>
+                        <p className="font-bold text-gray-800 mb-1">Entreprise</p>
+                        <p className="text-gray-900">{exp.societe || exp.entreprise || "Non renseignée"}</p>
+                      </div>
                     </div>
-                  ))
-                ) : (
+                    {exp.duree && <div className="mb-4"><p className="font-bold text-gray-800 mb-1">Durée</p><p className="text-gray-700">{exp.duree} mois</p></div>}
+                    {exp.description && <div><p className="font-bold text-gray-800 mb-1">Description</p><p className="text-gray-700 leading-relaxed">{exp.description}</p></div>}
+                  </div>
+                )) : (
                   <div className="text-center py-12">
                     <Briefcase className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                     <p className="text-gray-500 text-lg font-medium mb-2">Aucune expérience professionnelle</p>
@@ -274,7 +269,6 @@ export default function CandidatureDetail() {
                   <CheckCircle className="w-6 h-6 text-[#094363]" />
                   <h2 className="text-xl font-semibold text-[#094363]">Résultats des tests</h2>
                 </div>
-                
                 <div className="space-y-4">
                   {testResults.map((result, i) => (
                     <div key={i} className="border border-gray-200 rounded-lg p-6 bg-gradient-to-r from-blue-50 to-white">
@@ -299,30 +293,28 @@ export default function CandidatureDetail() {
                 </div>
               </div>
             )}
+
           </div>
 
           {/* Sidebar */}
           <div className="space-y-8">
-            
+
             {/* CV */}
             <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
               <div className="flex items-center space-x-3 mb-6">
                 <FileText className="w-6 h-6 text-[#094363]" />
                 <h2 className="text-xl font-semibold text-[#094363]">CV</h2>
               </div>
-              
               {c.cvUrl ? (
-                <a
-                  href={c.cvUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  download={`${prenom}_${nom}_CV.pdf`}
-                  className="flex items-center justify-center space-x-2 w-full px-4 py-3 bg-gradient-to-r from-[#094363] to-blue-600 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-md hover:shadow-lg"
-                >
-                  <FileText className="w-5 h-5" />
-                  <span className="font-medium">Télécharger le CV</span>
-                  <Download className="w-4 h-4" />
-                </a>
+                <div className="space-y-3">
+                  <button
+                    onClick={() => downloadPdf(c.cvUrl, `${prenom}_${nom}_CV.pdf`)}
+                    className="flex items-center justify-center space-x-2 w-full px-4 py-3 bg-gradient-to-r from-[#094363] to-blue-600 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-md hover:shadow-lg"
+                  >
+                    <FileText className="w-5 h-5" />
+                    <span className="font-medium">Ouvrir / Télécharger le CV</span>
+                  </button>
+                </div>
               ) : (
                 <div className="text-center py-8">
                   <FileText className="w-12 h-12 text-gray-300 mx-auto mb-3" />
@@ -393,7 +385,7 @@ export default function CandidatureDetail() {
 
                   {/* Consentement */}
                   <div className="p-4 bg-gray-50 rounded-lg">
-                    <p className="font-bold text-gray-800 mb-2">Consentement données</p>
+                    <p className="font-bold text-gray-800 mb-2">Consentement pour l'utilisation des données personnelles dans le but de la candidature</p>
                     <span className={`px-3 py-1 rounded-full font-medium ${
                       postEntretien.consentement 
                         ? 'bg-green-100 text-green-800' 

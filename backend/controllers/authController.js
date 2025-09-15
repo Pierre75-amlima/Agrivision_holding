@@ -2,9 +2,8 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import User from '../models/user.js';
 
-
 // Enregistrement d’un nouvel utilisateur
-export const register  = async (req, res) => {
+export const register = async (req, res) => {
   try {
     const { nom, prenoms, email, motDePasse, role } = req.body;
 
@@ -23,7 +22,8 @@ export const register  = async (req, res) => {
       prenoms,
       email,
       motDePasse: hashedPassword,
-      role: role || 'candidat'
+      role: role || 'candidat',
+      // mustChangePassword est déjà géré dans le schema (true pour admin, false pour candidat)
     });
 
     await newUser.save();
@@ -35,8 +35,8 @@ export const register  = async (req, res) => {
   }
 };
 
-// Connexion d’un utilisateur
-export const  login = async (req, res) => {
+// Connexion d’un utilisateur avec gestion première connexion
+export const login = async (req, res) => {
   try {
     const { email, motDePasse } = req.body;
 
@@ -58,8 +58,6 @@ export const  login = async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '1d' }
     );
-    
-
 
     res.status(200).json({
       message: 'Connexion réussie.',
@@ -69,11 +67,39 @@ export const  login = async (req, res) => {
         nom: user.nom,
         prenoms: user.prenoms,
         email: user.email,
-        role: user.role
+        role: user.role,
+        mustChangePassword: user.mustChangePassword, // <-- directement en base
       }
     });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Erreur serveur lors de la connexion.' });
+  }
+};
+
+// Changement de mot de passe
+export const changePassword = async (req, res) => {
+  try {
+    const userId = req.user.id; // récupéré depuis le middleware auth
+    const { oldPassword, newPassword } = req.body;
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: 'Utilisateur introuvable.' });
+
+    const isMatch = await bcrypt.compare(oldPassword, user.motDePasse);
+    if (!isMatch) return res.status(400).json({ message: 'Ancien mot de passe incorrect.' });
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    user.motDePasse = hashedPassword;
+
+    // 🚀 Ici, on désactive l’obligation de changer le mot de passe
+    user.mustChangePassword = false;
+
+    await user.save();
+
+    res.status(200).json({ message: 'Mot de passe mis à jour avec succès.' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erreur serveur lors de la mise à jour du mot de passe.' });
   }
 };

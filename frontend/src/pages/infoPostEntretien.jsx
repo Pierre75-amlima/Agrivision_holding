@@ -1,5 +1,4 @@
-
-import React, { useState, useRef, useContext } from "react";
+import React, { useState, useRef, useContext, useEffect } from "react";
 import SignatureCanvas from "react-signature-canvas";
 import { AuthContext } from "../contexts/authContext";
 
@@ -20,9 +19,60 @@ export default function InfoPostEntretien() {
     references: [],
   });
 
+  const [isPhoneFromDB, setIsPhoneFromDB] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
+  const [dataLoading, setDataLoading] = useState(true);
   const sigPadRef = useRef();
+
+  // 🔹 Fonction pour valider et formater les numéros de téléphone (8 chiffres max)
+  const handlePhoneInput = (value) => {
+    let numericValue = value.replace(/\D/g, "");
+    if (numericValue.length > 8) {
+      numericValue = numericValue.slice(0, 8);
+    }
+    return numericValue;
+  };
+
+  // 🔹 Récupération automatique des données de candidature
+  useEffect(() => {
+    const fetchUserCandidatureData = async () => {
+      if (!user || !token) return;
+
+      try {
+        setDataLoading(true);
+        const res = await fetch(
+          `http://localhost:5000/api/candidats/user/${user._id || user.id}`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        if (res.ok) {
+          const candidatures = await res.json();
+          if (candidatures && candidatures.length > 0) {
+            const derniereCandidature = candidatures[candidatures.length - 1];
+            setFormData((prev) => ({
+              ...prev,
+              telephone: derniereCandidature.telephone || "",
+              adresse: derniereCandidature.adresse || "",
+            }));
+            setIsPhoneFromDB(true); // ✅ Numéro marqué comme venant de la base
+          }
+        }
+      } catch (err) {
+        console.error("❌ Erreur lors de la récupération des données:", err);
+      } finally {
+        setDataLoading(false);
+      }
+    };
+
+    fetchUserCandidatureData();
+  }, [user, token]);
 
   // 🔹 Champs simples
   const handleChange = (e) => {
@@ -31,16 +81,19 @@ export default function InfoPostEntretien() {
   };
 
   const handleTelephoneChange = (e) => {
-    let value = e.target.value.replace(/\D/g, "");
-    if (value.length > 10) value = value.slice(0, 10);
-    setFormData((prev) => ({ ...prev, telephone: value }));
+    setIsPhoneFromDB(false); // ✅ Dès qu'on tape, ce n'est plus "from DB"
+    const formattedValue = handlePhoneInput(e.target.value);
+    setFormData((prev) => ({ ...prev, telephone: formattedValue }));
   };
 
   // 🔹 Contacts d'urgence
   const addContactUrgence = () =>
     setFormData((prev) => ({
       ...prev,
-      contactsUrgence: [...prev.contactsUrgence, { nom: "", prenom: "", relation: "", telephone: "" }],
+      contactsUrgence: [
+        ...prev.contactsUrgence,
+        { nom: "", prenom: "", relation: "", telephone: "" },
+      ],
     }));
 
   const removeContactUrgence = (index) =>
@@ -51,7 +104,11 @@ export default function InfoPostEntretien() {
 
   const handleContactUrgenceChange = (index, field, value) => {
     const updated = [...formData.contactsUrgence];
-    updated[index][field] = value;
+    if (field === "telephone") {
+      updated[index][field] = handlePhoneInput(value);
+    } else {
+      updated[index][field] = value;
+    }
     setFormData((prev) => ({ ...prev, contactsUrgence: updated }));
   };
 
@@ -70,7 +127,11 @@ export default function InfoPostEntretien() {
 
   const handleReferenceChange = (index, field, value) => {
     const updated = [...formData.references];
-    updated[index][field] = value;
+    if (field === "contact") {
+      updated[index][field] = handlePhoneInput(value);
+    } else {
+      updated[index][field] = value;
+    }
     setFormData((prev) => ({ ...prev, references: updated }));
   };
 
@@ -96,15 +157,50 @@ export default function InfoPostEntretien() {
   };
 
   const saveSignature = () => {
-    if (sigPadRef.current.isEmpty()) return;
+    if (sigPadRef.current.isEmpty()) return null;
     const dataURL = sigPadRef.current.toDataURL();
     setFormData((prev) => ({ ...prev, signature: dataURL }));
+    return dataURL;
   };
 
-  // 🔹 Popup de succès avec déconnexion directe
+  // 🔹 Popup de succès
   const handleSuccessClose = () => {
     setShowSuccessPopup(false);
     logout();
+  };
+
+  // 🔹 Validation des numéros
+  const validatePhoneNumbers = () => {
+    if (!isPhoneFromDB && formData.telephone && formData.telephone.length !== 8) {
+      alert("Le numéro de téléphone principal doit contenir exactement 8 chiffres.");
+      return false;
+    }
+
+    for (let i = 0; i < formData.contactsUrgence.length; i++) {
+      const contact = formData.contactsUrgence[i];
+      if (contact.telephone && contact.telephone.length !== 8) {
+        alert(
+          `Le numéro de téléphone du contact d'urgence ${
+            i + 1
+          } doit contenir exactement 8 chiffres.`
+        );
+        return false;
+      }
+    }
+
+    for (let i = 0; i < formData.references.length; i++) {
+      const reference = formData.references[i];
+      if (reference.contact && reference.contact.length !== 8) {
+        alert(
+          `Le numéro de contact de la référence ${
+            i + 1
+          } doit contenir exactement 8 chiffres.`
+        );
+        return false;
+      }
+    }
+
+    return true;
   };
 
   // 🔹 Soumission
@@ -115,10 +211,16 @@ export default function InfoPostEntretien() {
         return;
       }
 
-      // 🔹 Sauvegarde de la signature avant envoi
-      saveSignature();
+      if (!validatePhoneNumbers()) {
+        return;
+      }
 
       setLoading(true);
+
+      let signatureDataURL = "";
+      if (sigPadRef.current && !sigPadRef.current.isEmpty()) {
+        signatureDataURL = sigPadRef.current.toDataURL();
+      }
 
       const form = new FormData();
       form.append("userId", user._id || user.id);
@@ -128,14 +230,13 @@ export default function InfoPostEntretien() {
       form.append("contactsUrgence", JSON.stringify(formData.contactsUrgence || []));
       form.append("references", JSON.stringify(formData.references || []));
 
-      // Photo
       if (formData.photoFile) {
         form.append("photo", formData.photoFile);
       }
 
-      // Signature
-      if (formData.signature) {
-        const blob = await (await fetch(formData.signature)).blob();
+      if (signatureDataURL) {
+        const response = await fetch(signatureDataURL);
+        const blob = await response.blob();
         form.append("signature", blob, "signature.png");
       }
 
@@ -150,14 +251,9 @@ export default function InfoPostEntretien() {
         throw new Error(errorBody.message || "Erreur serveur");
       }
 
-      const data = await res.json();
-      console.log("Retour backend :", data);
-
       setShowSuccessPopup(true);
-
     } catch (err) {
-      console.error("Erreur handleSubmit :", err);
-      alert("Erreur lors de l'enregistrement");
+      alert("Erreur lors de l'enregistrement: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -175,6 +271,17 @@ export default function InfoPostEntretien() {
         {/* Infos personnelles */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
           <h2 className="text-lg font-semibold text-[#094363] mb-4">Informations personnelles</h2>
+          
+          {/* Indicateur de chargement des données */}
+          {dataLoading && (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+              <p className="text-sm text-blue-600 flex items-center">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                Récupération de vos informations précédentes...
+              </p>
+            </div>
+          )}
+          
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Nom</label>
@@ -192,12 +299,35 @@ export default function InfoPostEntretien() {
               <label className="block text-sm font-medium text-gray-700 mb-1">Téléphone</label>
               <div className="flex">
                 <span className="flex items-center px-3 bg-[#094363] text-white border border-[#094363] rounded-l-md">+229</span>
-                <input value={formData.telephone} onChange={handleTelephoneChange} placeholder="Téléphone" className="flex-1 p-3 border border-l-0 border-gray-300 rounded-r-md focus:outline-none focus:border-[#094363]"/>
+                <input 
+                  value={formData.telephone} 
+                  onChange={handleTelephoneChange} 
+                  placeholder="Téléphone (10 chiffres)"
+                  maxLength={10}
+                  className="flex-1 p-3 border border-l-0 border-gray-300 rounded-r-md focus:outline-none focus:border-[#094363]"
+                  disabled={dataLoading}
+                />
               </div>
+              {!dataLoading && formData.telephone && formData.telephone.length === 10 && (
+                <p className="text-xs text-green-600 mt-1">✓ Numéro valide</p>
+              )}
+              {!dataLoading && formData.telephone && formData.telephone.length > 0 && formData.telephone.length < 10 && (
+                <p className="text-xs text-red-600 mt-1">⚠ Le numéro doit contenir exactement 10 chiffres</p>
+              )}
             </div>
             <div className="sm:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">Adresse</label>
-              <input value={formData.adresse} name="adresse" onChange={handleChange} placeholder="Votre adresse complète" className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:border-[#094363]"/>
+              <input 
+                value={formData.adresse} 
+                name="adresse" 
+                onChange={handleChange} 
+                placeholder="Votre adresse complète" 
+                className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:border-[#094363]"
+                disabled={dataLoading}
+              />
+              {!dataLoading && formData.adresse && (
+                <p className="text-xs text-green-600 mt-1">✓ Vos infos ont été récupéré automatiquement</p>
+              )}
             </div>
           </div>
         </div>
@@ -216,12 +346,43 @@ export default function InfoPostEntretien() {
               {formData.contactsUrgence.map((c, i) => (
                 <div key={i} className="border border-gray-200 rounded-md p-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    <input value={c.nom} onChange={(e) => handleContactUrgenceChange(i, "nom", e.target.value)} placeholder="Nom" className="p-2 border border-gray-300 rounded-md focus:outline-none focus:border-[#094363]"/>
-                    <input value={c.prenom} onChange={(e) => handleContactUrgenceChange(i, "prenom", e.target.value)} placeholder="Prénom" className="p-2 border border-gray-300 rounded-md focus:outline-none focus:border-[#094363]"/>
-                    <input value={c.relation} onChange={(e) => handleContactUrgenceChange(i, "relation", e.target.value)} placeholder="Relation" className="p-2 border border-gray-300 rounded-md focus:outline-none focus:border-[#094363]"/>
+                    <input 
+                      value={c.nom} 
+                      onChange={(e) => handleContactUrgenceChange(i, "nom", e.target.value)} 
+                      placeholder="Nom" 
+                      className="p-2 border border-gray-300 rounded-md focus:outline-none focus:border-[#094363]"
+                    />
+                    <input 
+                      value={c.prenom} 
+                      onChange={(e) => handleContactUrgenceChange(i, "prenom", e.target.value)} 
+                      placeholder="Prénom" 
+                      className="p-2 border border-gray-300 rounded-md focus:outline-none focus:border-[#094363]"
+                    />
+                    <input 
+                      value={c.relation} 
+                      onChange={(e) => handleContactUrgenceChange(i, "relation", e.target.value)} 
+                      placeholder="Relation" 
+                      className="p-2 border border-gray-300 rounded-md focus:outline-none focus:border-[#094363]"
+                    />
                     <div className="flex gap-2">
-                      <input value={c.telephone} onChange={(e) => handleContactUrgenceChange(i, "telephone", e.target.value)} placeholder="Téléphone" className="flex-1 p-2 border border-gray-300 rounded-md focus:outline-none focus:border-[#094363]"/>
-                      <button onClick={() => removeContactUrgence(i)} className="p-2 bg-red-100 text-red-600 rounded-md hover:bg-red-200">×</button>
+                      <div className="flex-1">
+                        <input 
+                          value={c.telephone} 
+                          onChange={(e) => handleContactUrgenceChange(i, "telephone", e.target.value)} 
+                          placeholder="Téléphone "
+                          maxLength={10}
+                          className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:border-[#094363]"
+                        />
+                        {c.telephone && c.telephone.length > 0 && c.telephone.length < 10 && (
+                          <p className="text-xs text-red-600 mt-1">10 chiffres requis</p>
+                        )}
+                      </div>
+                      <button 
+                        onClick={() => removeContactUrgence(i)} 
+                        className="p-2 bg-red-100 text-red-600 rounded-md hover:bg-red-200"
+                      >
+                        ×
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -244,11 +405,37 @@ export default function InfoPostEntretien() {
               {formData.references.map((r, i) => (
                 <div key={i} className="border border-gray-200 rounded-md p-4">
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <input value={r.nom} onChange={(e) => handleReferenceChange(i, "nom", e.target.value)} placeholder="Nom complet" className="p-2 border border-gray-300 rounded-md focus:outline-none focus:border-[#094363]"/>
-                    <input value={r.poste} onChange={(e) => handleReferenceChange(i, "poste", e.target.value)} placeholder="Poste" className="p-2 border border-gray-300 rounded-md focus:outline-none focus:border-[#094363]"/>
+                    <input 
+                      value={r.nom} 
+                      onChange={(e) => handleReferenceChange(i, "nom", e.target.value)} 
+                      placeholder="Nom complet" 
+                      className="p-2 border border-gray-300 rounded-md focus:outline-none focus:border-[#094363]"
+                    />
+                    <input 
+                      value={r.poste} 
+                      onChange={(e) => handleReferenceChange(i, "poste", e.target.value)} 
+                      placeholder="Poste" 
+                      className="p-2 border border-gray-300 rounded-md focus:outline-none focus:border-[#094363]"
+                    />
                     <div className="flex gap-2">
-                      <input value={r.contact} onChange={(e) => handleReferenceChange(i, "contact", e.target.value)} placeholder="Contact" className="flex-1 p-2 border border-gray-300 rounded-md focus:outline-none focus:border-[#094363]"/>
-                      <button onClick={() => removeReference(i)} className="p-2 bg-red-100 text-red-600 rounded-md hover:bg-red-200">×</button>
+                      <div className="flex-1">
+                        <input 
+                          value={r.contact} 
+                          onChange={(e) => handleReferenceChange(i, "contact", e.target.value)} 
+                          placeholder="Téléphone "
+                          maxLength={10}
+                          className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:border-[#094363]"
+                        />
+                        {r.contact && r.contact.length > 0 && r.contact.length < 10 && (
+                          <p className="text-xs text-red-600 mt-1">10 chiffres requis</p>
+                        )}
+                      </div>
+                      <button 
+                        onClick={() => removeReference(i)} 
+                        className="p-2 bg-red-100 text-red-600 rounded-md hover:bg-red-200"
+                      >
+                        ×
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -291,8 +478,8 @@ export default function InfoPostEntretien() {
             </div>
           </div>
           
-          <button onClick={handleSubmit} disabled={loading || !formData.consentement} className={`w-full py-3 px-4 font-medium rounded-md transition-colors ${loading || !formData.consentement ? "bg-gray-300 text-gray-500 cursor-not-allowed" : "bg-[#094363] text-white hover:bg-blue-700"}`}>
-            {loading ? "Enregistrement..." : "Finaliser ma candidature"}
+          <button onClick={handleSubmit} disabled={loading || !formData.consentement || dataLoading} className={`w-full py-3 px-4 font-medium rounded-md transition-colors ${loading || !formData.consentement || dataLoading ? "bg-gray-300 text-gray-500 cursor-not-allowed" : "bg-[#094363] text-white hover:bg-blue-700"}`}>
+            {loading ? "Enregistrement..." : dataLoading ? "Chargement des données..." : "Finaliser ma candidature"}
           </button>
         </div>
       </div>

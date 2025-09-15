@@ -1,16 +1,13 @@
 import mongoose from "mongoose";
 import Candidate from "../models/candidate.js";
 import Offre from "../models/offre.js";
+import { getCloudinaryUrl } from "../config/cloudinary.js";
 
 /**
  * ➕ Créer ou mettre à jour une candidature (user + offre)
  */
 export const createOrUpdateCandidate = async (req, res) => {
   try {
-    console.log('>>> Enter createOrUpdateCandidate');
-    console.log('req.body (raw FormData):', req.body);
-    console.log('req.file:', req.file);
-
     const body = { ...req.body };
 
     // Parser champs JSON encodés en string (FormData)
@@ -21,18 +18,21 @@ export const createOrUpdateCandidate = async (req, res) => {
       try { body.experiences = JSON.parse(body.experiences); } catch (e) { console.warn('Experiences parse failed:', e.message); }
     }
 
-    // CV uploadé
+    // CORRECTION : CV uploadé
     if (req.file) {
-      console.log('>>> File info:', req.file);
-      const cvUrl =
-        req.file.path ||
-        req.file.secure_url ||
-        req.file.url ||
-        req.file.location ||
-        (req.file?.metadata && req.file.metadata.secure_url) ||
-        null;
-      if (cvUrl) body.cvUrl = cvUrl;
-      console.log('>>> CV URL:', cvUrl);
+      console.log('Fichier uploadé :', req.file);
+      console.log('Public ID :', req.file.public_id);
+      console.log('Secure URL :', req.file.secure_url);
+      console.log('MIME type :', req.file.mimetype);
+
+      // UTILISER DIRECTEMENT L'URL SÉCURISÉE DE CLOUDINARY
+      body.cvUrl = req.file.secure_url;
+      
+      // Alternative si secure_url n'est pas disponible :
+      if (!body.cvUrl && req.file.public_id) {
+        const resourceType = req.file.mimetype === 'application/pdf' ? 'raw' : 'image';
+        body.cvUrl = getCloudinaryUrl(req.file.public_id, resourceType);
+      }
     }
 
     // Attacher l'utilisateur
@@ -42,7 +42,6 @@ export const createOrUpdateCandidate = async (req, res) => {
       else return res.status(401).json({ message: "Utilisateur non authentifié" });
     }
 
-    // ⚡ Forcer ObjectId pour éviter doublons
     const userId = new mongoose.Types.ObjectId(body.user);
     const offreId = new mongoose.Types.ObjectId(body.offre);
 
@@ -50,22 +49,18 @@ export const createOrUpdateCandidate = async (req, res) => {
     let candidate = await Candidate.findOne({ user: userId, offre: offreId });
 
     if (candidate) {
-      // ➡ Mise à jour
       Object.assign(candidate, body);
       candidate.dateSoumission = Date.now();
       await candidate.save();
-      console.log('Candidate updated id:', candidate._id);
       return res.status(200).json(candidate);
     } else {
-      // ➡ Création
       candidate = new Candidate({ ...body, user: userId, offre: offreId });
       await candidate.save();
-      console.log('Candidate created id:', candidate._id);
       return res.status(201).json(candidate);
     }
 
   } catch (error) {
-    console.error('Erreur createOrUpdateCandidate ->', error);
+    console.error('Erreur dans createOrUpdateCandidate :', error);
     return res.status(500).json({ message: "Erreur lors de l'enregistrement", error: error.message || error });
   }
 };
@@ -77,90 +72,95 @@ const normalizeSearchTerm = (term) => {
   if (!term) return '';
   return term
     .trim()
-    // Enlever les accents
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    // Enlever les caractères spéciaux pour regex MAIS garder les espaces
-    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    .toLowerCase();
 };
 
 /**
- * 📌 Récupérer tous les candidats avec filtres dynamiques + populate (VERSION CORRIGÉE)
+ * 🔧 Fonction pour créer des variations de mots (singulier/pluriel, terminaisons communes)
+ */
+const createWordVariations = (word) => {
+  const variations = [word];
+  const normalized = normalizeSearchTerm(word);
+  
+  // Ajouter le mot normalisé s'il est différent
+  if (normalized !== word) variations.push(normalized);
+  
+  // Gérer les terminaisons communes françaises
+  const commonEndings = {
+    'ment': 'eur', // management -> manageur
+    'eur': 'ment', // manageur -> management
+    'ion': 'er',   // gestion -> gérer
+    'er': 'ion',   // gérer -> gestion
+    's': '',       // pluriels
+    'x': '',       // pluriels
+  };
+  
+  Object.keys(commonEndings).forEach(ending => {
+    if (normalized.endsWith(ending)) {
+      const root = normalized.slice(0, -ending.length);
+      const newEnding = commonEndings[ending];
+      if (newEnding) {
+        variations.push(root + newEnding);
+      } else {
+        variations.push(root); // Pour supprimer s, x
+      }
+    }
+  });
+  
+  return [...new Set(variations)]; // Supprimer les doublons
+};
+
+/**
+ * 📌 Récupérer tous les candidats avec filtres dynamiques + populate (VERSION TRÈS FLEXIBLE)
  */
 export const getAllCandidates = async (req, res) => {
   try {
-    console.log('>>> Recherche avec paramètres:', req.query);
-    
     const { search, poste, statut, competences, dateFrom, dateTo, testValide, minExperienceMonths } = req.query;
     
-    // 🚀 Utiliser l'agrégation pour une recherche plus puissante
     let pipeline = [
-      {
-        $lookup: {
-          from: "users",
-          localField: "user",
-          foreignField: "_id",
-          as: "user"
-        }
-      },
-      {
-        $lookup: {
-          from: "offres",
-          localField: "offre",
-          foreignField: "_id",
-          as: "offre"
-        }
-      },
+      { $lookup: { from: "users", localField: "user", foreignField: "_id", as: "user" } },
+      { $lookup: { from: "offres", localField: "offre", foreignField: "_id", as: "offre" } },
       { $unwind: "$user" },
       { $unwind: "$offre" }
     ];
 
-    // 📝 Construire les conditions de filtrage
     let matchConditions = {};
 
-    // 🔍 Recherche globale sur nom et prenoms (CORRIGÉE)
+    // 🔍 Recherche globale sur nom et prénoms
     if (search && search.trim()) {
       const normalizedSearch = normalizeSearchTerm(search);
-      console.log('>>> Terme de recherche normalisé:', normalizedSearch);
-      console.log('>>> Recherche originale:', search);
-      
       matchConditions.$or = [
-        { 
-          "user.nom": { $regex: normalizedSearch, $options: "i" }
-        },
-        { 
-          "user.prenoms": { $regex: normalizedSearch, $options: "i" }
-        },
-        {
-          $expr: {
-            $regexMatch: {
-              input: { 
-                $toLower: { 
-                  $concat: [
-                    { $ifNull: ["$user.nom", ""] }, 
-                    " ", 
-                    { $ifNull: ["$user.prenoms", ""] }
-                  ] 
-                } 
-              },
-              regex: normalizedSearch,
-              options: "i"
-            }
-          }
-        }
+        { "user.nom": { $regex: normalizedSearch, $options: "i" } },
+        { "user.prenoms": { $regex: normalizedSearch, $options: "i" } },
+        { $expr: { $regexMatch: { input: { $toLower: { $concat: [{ $ifNull: ["$user.nom",""] }, " ", { $ifNull: ["$user.prenoms",""] }] } }, regex: normalizedSearch, options: "i" } } }
       ];
     }
 
-    // 🎯 Recherche par poste (CORRIGÉE)
+    // 🎯 Recherche par poste TRÈS FLEXIBLE
     if (poste && poste.trim()) {
       const normalizedPoste = normalizeSearchTerm(poste);
-      console.log('>>> Poste normalisé:', normalizedPoste);
-      console.log('>>> Recherche poste originale:', poste);
+      const mots = normalizedPoste.split(/\s+/).filter(Boolean);
       
-      matchConditions["offre.titre"] = { 
-        $regex: normalizedPoste, 
-        $options: "i" 
-      };
+      // Créer toutes les variations possibles pour chaque mot
+      const allVariations = mots.flatMap(mot => createWordVariations(mot));
+      
+      // Au lieu d'exiger TOUS les mots (AND), on cherche si AU MOINS UN mot correspond (OR)
+      // Ou on peut faire un système de score : plus il y a de mots qui correspondent, mieux c'est
+      matchConditions.$or = [
+        // Recherche exacte d'abord (priorité haute)
+        { "offre.titre": { $regex: normalizedPoste, $options: "i" } },
+        // Puis recherche avec variations
+        ...allVariations.map(variation => ({
+          "offre.titre": { $regex: variation, $options: "i" }
+        })),
+        // Recherche dans la description aussi
+        { "offre.description": { $regex: normalizedPoste, $options: "i" } },
+        ...allVariations.map(variation => ({
+          "offre.description": { $regex: variation, $options: "i" }
+        }))
+      ];
     }
 
     // 📌 Statut
@@ -168,22 +168,17 @@ export const getAllCandidates = async (req, res) => {
       matchConditions.statut = statut;
     }
 
-    // 🛠 Compétences (recherche partielle insensible à la casse) - CORRIGÉE
+    // 🛠 Compétences TRÈS FLEXIBLES avec variations
     if (competences && competences.trim()) {
-      const compArray = competences.split(",")
-        .map(c => normalizeSearchTerm(c.trim()))
-        .filter(Boolean);
+      const compArray = competences.split(",").map(c => c.trim()).filter(Boolean);
+      const allCompVariations = compArray.flatMap(comp => createWordVariations(comp));
       
-      console.log('>>> Compétences normalisées:', compArray);
-      
-      if (compArray.length > 0) {
-        matchConditions.competences = {
-          $elemMatch: {
-            $regex: compArray.join('|'),
-            $options: "i"
-          }
-        };
-      }
+      matchConditions.$or = [
+        ...(matchConditions.$or || []),
+        ...allCompVariations.map(variation => ({
+          competences: { $regex: variation, $options: "i" }
+        }))
+      ];
     }
 
     // 📆 Dates
@@ -199,6 +194,7 @@ export const getAllCandidates = async (req, res) => {
         matchConditions["testResult.score"] = { $exists: true, $ne: null };
       } else {
         matchConditions.$or = [
+          ...(matchConditions.$or || []),
           { "testResult.score": { $exists: false } },
           { "testResult.score": null }
         ];
@@ -207,92 +203,96 @@ export const getAllCandidates = async (req, res) => {
 
     // ⏳ Expérience minimale
     if (minExperienceMonths) {
-      matchConditions.experiences = { 
-        $elemMatch: { 
-          duree: { $gte: Number(minExperienceMonths) } 
-        } 
-      };
+      matchConditions.experiences = { $elemMatch: { duree: { $gte: Number(minExperienceMonths) } } };
     }
 
-    // Ajouter les conditions de filtrage au pipeline
-    if (Object.keys(matchConditions).length > 0) {
-      pipeline.push({ $match: matchConditions });
+    if (Object.keys(matchConditions).length > 0) pipeline.push({ $match: matchConditions });
+
+    // Ajouter un score de pertinence si recherche par poste
+    if (poste && poste.trim()) {
+      pipeline.push({
+        $addFields: {
+          searchScore: {
+            $add: [
+              // Score pour titre exact
+              { $cond: [{ $regexMatch: { input: "$offre.titre", regex: normalizeSearchTerm(poste), options: "i" } }, 10, 0] },
+              // Score pour mots individuels dans titre
+              { $cond: [{ $regexMatch: { input: "$offre.titre", regex: poste.split(' ')[0] || '', options: "i" } }, 5, 0] },
+              // Score pour description
+              { $cond: [{ $regexMatch: { input: "$offre.description", regex: normalizeSearchTerm(poste), options: "i" } }, 2, 0] }
+            ]
+          }
+        }
+      });
+      pipeline.push({ $sort: { searchScore: -1, dateSoumission: -1 } });
+    } else {
+      pipeline.push({ $sort: { dateSoumission: -1 } });
     }
-
-    // Trier par date de soumission
-    pipeline.push({ $sort: { dateSoumission: -1 } });
-
-    console.log('>>> Pipeline de recherche:', JSON.stringify(pipeline, null, 2));
 
     const candidates = await Candidate.aggregate(pipeline);
-
-    console.log(`>>> Trouvé ${candidates.length} candidat(s)`);
-    
     res.status(200).json(candidates);
+
   } catch (error) {
-    console.error('Erreur getAllCandidates:', error);
     res.status(500).json({ message: "Erreur lors de la récupération", error: error.message });
   }
 };
 
 /**
- * 📌 Version alternative avec recherche simple (fallback)
+ * 📌 Version alternative simple mais plus flexible
  */
 export const getAllCandidatesSimple = async (req, res) => {
   try {
     const { search, poste, statut, competences } = req.query;
-    let filters = {};
-
-    // Recherche simple avec populate
-    const candidates = await Candidate.find(filters)
+    const candidates = await Candidate.find({})
       .populate("user", "nom prenoms email")
       .populate("offre", "titre description")
       .sort({ dateSoumission: -1 });
 
-    // Filtrage côté application si nécessaire
-    let filteredCandidates = candidates;
+    let filtered = candidates;
 
+    // Recherche nom/prénom
     if (search && search.trim()) {
-      const normalizedSearch = normalizeSearchTerm(search);
-      filteredCandidates = candidates.filter(candidate => {
-        const fullName = `${candidate.user?.nom || ''} ${candidate.user?.prenoms || ''}`.toLowerCase();
-        const nom = (candidate.user?.nom || '').toLowerCase();
-        const prenoms = (candidate.user?.prenoms || '').toLowerCase();
-        
-        return fullName.includes(normalizedSearch.toLowerCase()) || 
-               nom.includes(normalizedSearch.toLowerCase()) || 
-               prenoms.includes(normalizedSearch.toLowerCase());
-      });
+      const s = normalizeSearchTerm(search);
+      filtered = filtered.filter(c => `${c.user?.nom || ''} ${c.user?.prenoms || ''}`.toLowerCase().includes(s));
     }
 
+    // Recherche poste flexible
     if (poste && poste.trim()) {
       const normalizedPoste = normalizeSearchTerm(poste);
-      filteredCandidates = filteredCandidates.filter(candidate => {
-        const titre = (candidate.offre?.titre || '').toLowerCase();
-        return titre.includes(normalizedPoste.toLowerCase());
+      const mots = normalizedPoste.split(/\s+/).filter(Boolean);
+      
+      filtered = filtered.filter(c => {
+        const titre = (c.offre?.titre || '').toLowerCase();
+        const description = (c.offre?.description || '').toLowerCase();
+        
+        // Recherche flexible : si au moins un mot correspond
+        return mots.some(mot => {
+          const variations = createWordVariations(mot);
+          return variations.some(variation => 
+            titre.includes(variation) || description.includes(variation)
+          );
+        });
       });
     }
 
-    if (statut) {
-      filteredCandidates = filteredCandidates.filter(candidate => 
-        candidate.statut === statut
-      );
-    }
+    // Statut
+    if (statut) filtered = filtered.filter(c => c.statut === statut);
 
+    // Compétences flexibles
     if (competences && competences.trim()) {
-      const compArray = competences.split(",").map(c => c.trim().toLowerCase());
-      filteredCandidates = filteredCandidates.filter(candidate => {
-        return compArray.some(comp => 
-          candidate.competences?.some(candidateComp => 
-            candidateComp.toLowerCase().includes(comp)
-          )
-        );
+      const compArray = competences.split(",").map(c => c.trim()).filter(Boolean);
+      filtered = filtered.filter(c => {
+        return compArray.some(comp => {
+          const variations = createWordVariations(comp);
+          return c.competences?.some(cc => 
+            variations.some(variation => cc.toLowerCase().includes(variation))
+          );
+        });
       });
     }
 
-    res.status(200).json(filteredCandidates);
+    res.status(200).json(filtered);
   } catch (error) {
-    console.error('Erreur getAllCandidatesSimple:', error);
     res.status(500).json({ message: "Erreur lors de la récupération", error: error.message });
   }
 };
@@ -367,5 +367,26 @@ export const deleteManyCandidates = async (req, res) => {
     res.status(200).json({ message: "Candidats supprimés" });
   } catch (error) {
     res.status(500).json({ message: "Erreur lors de la suppression multiple", error });
+  }
+};
+
+/**
+ * 🔎 Récupérer toutes les candidatures d'un utilisateur spécifique
+ */
+export const getCandidatesByUser = async (req, res) => {
+  try {
+    const userId = new mongoose.Types.ObjectId(req.params.userId);
+    
+    const candidates = await Candidate.find({ user: userId })
+      .populate("user", "nom prenoms email")
+      .populate("offre", "titre description")
+      .sort({ dateSoumission: -1 }); // Plus récent en premier
+    
+    res.status(200).json(candidates);
+  } catch (error) {
+    res.status(500).json({ 
+      message: "Erreur lors de la récupération des candidatures de l'utilisateur", 
+      error: error.message || error 
+    });
   }
 };
