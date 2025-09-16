@@ -1,6 +1,6 @@
 import React from 'react';
 import Header from '../components/header';
-import Hero from '../components/Hero';
+import Hero from '../components/hero';
 import OffreList from '../sections/offreList';
 import PourquoiPostuler from '../sections/pourquoiPostuler';
 import Footer from '../components/footer';
