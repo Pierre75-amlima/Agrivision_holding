@@ -1,6 +1,6 @@
 // backend/controllers/testResultController.js
 import mongoose from "mongoose";
-import Test from "../models/Test.js";
+import Test from "../models/test.js";
 import TestResult from "../models/testResult.js";
 import NotificationService from "../services/notificationService.js";
 
