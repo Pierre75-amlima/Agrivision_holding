@@ -98,7 +98,7 @@ export default function TestPage() {
       };
 
       const res = await fetch(
-        `http://agrivision-holding.onrender.com/api/testResults/candidats/${userId}/tests/${test._id}/submit`,
+        `https://agrivision-holding.onrender.com/api/testResults/candidats/${userId}/tests/${test._id}/submit`,
         {
           method: "POST",
           headers: {
