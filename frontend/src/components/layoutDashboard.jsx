@@ -1,7 +1,7 @@
 // src/layouts/layoutDashboard.jsx
 import { useState, useMemo } from "react";
 import { Outlet, useLocation } from "react-router-dom";
-import Sidebar from "../components/Sidebar";
+import Sidebar from "../components/sidebar";
 import Header from "../components/hearderDashboard";
 
 export default function AdminLayout() {
