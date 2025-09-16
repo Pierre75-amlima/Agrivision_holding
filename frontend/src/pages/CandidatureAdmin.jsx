@@ -98,7 +98,7 @@ export default function Candidatures() {
   // Fonction pour charger tous les candidats (fallback)
   const fetchAllCandidats = useCallback(async () => {
     try {
-      const res = await fetch("https://agrivision-holding.onrender.com/api/candidats", {
+      const res = await fetch(`https://agrivision-holding.onrender.com/api/candidats`, {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
@@ -143,7 +143,7 @@ export default function Candidatures() {
   const handleBulkDelete = async () => {
     try {
       setDeleting(true);
-      const res = await fetch('http://agrivision-holding.onrender.com/api/candidats/bulk-delete', {
+      const res = await fetch(`http://agrivision-holding.onrender.com/api/candidats/bulk-delete`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${token}`,

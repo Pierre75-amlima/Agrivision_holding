@@ -16,7 +16,7 @@ export default function Header({ title, subtitle, onMenuClick, isDashboard = fal
     const fetchUnreadCount = async () => {
       try {
         setLoading(true);
-        const response = await fetch("https://agrivision-holding.onrender.com/api/notifications/unread-count", {
+        const response = await fetch(`https://agrivision-holding.onrender.com/api/notifications/unread-count`, {
           headers: {
             "Authorization": `Bearer ${token}`,
             "Content-Type": "application/json"

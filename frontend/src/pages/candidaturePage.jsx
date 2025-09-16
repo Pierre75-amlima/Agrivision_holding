@@ -92,7 +92,7 @@ export default function CandidaturePage() {
 
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('https://agrivision-holding.onrender.com/api/candidats', {
+      const res = await fetch(`https://agrivision-holding.onrender.com/api/candidats`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: dataToSend,

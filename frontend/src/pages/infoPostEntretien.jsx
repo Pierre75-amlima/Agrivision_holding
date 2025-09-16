@@ -240,7 +240,7 @@ export default function InfoPostEntretien() {
         form.append("signature", blob, "signature.png");
       }
 
-      const res = await fetch("https://agrivision-holding.onrender.com/api/info-post-entretien/", {
+      const res = await fetch(`https://agrivision-holding.onrender.com/api/info-post-entretien/`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: form,

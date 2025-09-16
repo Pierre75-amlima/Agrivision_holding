@@ -85,7 +85,7 @@ export default function Notifications() {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch("https://agrivision-holding.onrender.com/api/notifications/stats", {
+      const response = await fetch(`https://agrivision-holding.onrender.com/api/notifications/stats`, {
         headers: {
           "Authorization": `Bearer ${token}`,
           "Content-Type": "application/json"
@@ -127,7 +127,7 @@ export default function Notifications() {
   // Marquer toutes comme lues
   const markAllAsRead = async () => {
     try {
-      const response = await fetch("https://agrivision-holding.onrender.com/api/notifications/mark-all-read", {
+      const response = await fetch(`https://agrivision-holding.onrender.com/api/notifications/mark-all-read`, {
         method: "PUT",
         headers: {
           "Authorization": `Bearer ${token}`,

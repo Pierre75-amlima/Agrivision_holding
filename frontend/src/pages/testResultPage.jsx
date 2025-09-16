@@ -44,7 +44,7 @@ export default function TestPage() {
   useEffect(() => {
     const fetchTest = async () => {
       try {
-        const res = await fetch("https://agrivision-holding.onrender.com//api/tests/by-offre/${offreId}`, {
+        const res = await fetch(`https://agrivision-holding.onrender.com/api/tests/by-offre/${offreId}`, {
           headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
         });
 
