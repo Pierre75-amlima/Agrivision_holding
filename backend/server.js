@@ -27,7 +27,13 @@ const PORT = process.env.PORT || 5000;
 // Connexion à MongoDB via la fonction dédiée
 connectDB();
 
-app.use(cors());
+app.use(cors({
+  origin: [
+    'http://localhost:5173', // dev
+    'https://frontend-agrivision.onrender.com' // prod
+  ]
+}));
+
 
 app.use(express.json());
 
@@ -47,5 +53,6 @@ app.get('/', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Serveur démarré sur http://agrivision-holding.onrender.com:${PORT}`);
+  console.log(`Serveur démarré sur le port ${PORT}`);
+
 });

@@ -11,7 +11,7 @@ const OffreList = () => {
   const { openSignupModal } = useModal(); // <-- hook modal
 
   useEffect(() => {
-    fetch('/api/offres')
+    fetch('https://agrivision-holding.onrender.com/api/offres')
       .then(res => res.json())
       .then(data => {
         const sorted = data

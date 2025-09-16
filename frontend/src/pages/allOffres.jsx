@@ -11,7 +11,7 @@ const AllOffres = () => {
   const { openSignupModal } = useModal();
 
   useEffect(() => {
-    fetch('/api/offres')
+    fetch('https://agrivision-holding.onrender.com/api/offres')
       .then(res => res.json())
       .then(data => {
         const sorted = data.sort((a, b) => new Date(b.datePublication) - new Date(a.datePublication));
