@@ -7,7 +7,9 @@ import {
   getCandidatesByUser, // 🆕 Nouvelle import
   deleteCandidate,
   deleteManyCandidates,
-  getMyCandidateByOffer
+  getMyCandidateByOffer,
+  acceptCandidate,
+  rejectCandidate
 } from '../controllers/candidateController.js';
 import { upload } from '../config/cloudinary.js';
 import { verifyToken } from '../middlewares/auth.js';
@@ -34,6 +36,10 @@ router.get('/offre/:id', verifyToken, getCandidatesByOffer);
 
 // 🔎 Lecture d'un candidat par ID
 router.get('/:id', verifyToken, getCandidateById);
+
+// ✅ Accepter / Rejeter un candidat
+router.put("/:id/accept", verifyToken, acceptCandidate);
+router.put("/:id/reject", verifyToken, rejectCandidate);
 
 // ❌ Suppression individuelle
 router.delete('/:id', verifyToken, deleteCandidate);

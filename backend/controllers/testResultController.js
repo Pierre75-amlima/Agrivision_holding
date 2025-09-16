@@ -2,6 +2,7 @@
 import mongoose from "mongoose";
 import Test from "../models/Test.js";
 import TestResult from "../models/testResult.js";
+import NotificationService from "../services/notificationService.js";
 
 export const getTestByOffre = async (req, res) => {
   try {
@@ -68,8 +69,6 @@ export const getTestByOffre = async (req, res) => {
   }
 };
 
-
-
 export const submitTest = async (req, res) => {
   try {
     const { candidatId, testId } = req.params;
@@ -113,6 +112,21 @@ export const submitTest = async (req, res) => {
         testResult.status = "temps_depasse";
         testResult.finishedAt = Date.now();
         await testResult.save();
+
+        // 🔔 Populate pour notifications
+        await testResult.populate([
+          { path: 'candidat', select: 'nom prenoms email' },
+          { path: 'test', select: 'titre description' }
+        ]);
+
+        // DÉCLENCHER NOTIFICATION test terminé (temps dépassé)
+        try {
+          await NotificationService.creerNotificationTestTermine(testResult);
+          console.log('Notification test terminé (temps dépassé) envoyée');
+        } catch (error) {
+          console.error('Erreur notification test terminé:', error);
+        }
+
         return res.json({ status: "temps_depasse", score: 0, message: "Temps imparti dépassé." });
       }
     }
@@ -140,6 +154,21 @@ export const submitTest = async (req, res) => {
     testResult.finishedAt = Date.now();
     await testResult.save();
 
+    // 🔔 Populate pour notifications
+    await testResult.populate([
+      { path: 'candidat', select: 'nom prenoms email' },
+      { path: 'test', select: 'titre description' }
+    ]);
+
+    // DÉCLENCHER NOTIFICATION test terminé
+    try {
+      await NotificationService.creerNotificationTestTermine(testResult);
+      console.log('Notification test terminé envoyée');
+    } catch (error) {
+      console.error('Erreur notification test terminé:', error);
+      // Ne pas faire échouer la soumission si la notification échoue
+    }
+
     return res.json({
       status,
       score: note,
@@ -154,7 +183,6 @@ export const submitTest = async (req, res) => {
     return res.status(500).json({ message: "Erreur serveur lors de la soumission du test", error: err.message });
   }
 };
-
 
 // 🔹 Récupérer les résultats d'un candidat
 export const getTestResultsByCandidat = async (req, res) => {
@@ -175,5 +203,147 @@ export const getTestResultsByCandidat = async (req, res) => {
   } catch (err) {
     console.error("Erreur getTestResultsByCandidat :", err);
     res.status(500).json({ message: "Erreur serveur", error: err.message });
+  }
+};
+
+/**
+ * 📋 Assigner un test à un candidat avec notification
+ */
+export const assignTestToCandidate = async (req, res) => {
+  try {
+    const { testId, candidatId } = req.body;
+
+    if (!testId || !candidatId) {
+      return res.status(400).json({ message: "testId et candidatId requis" });
+    }
+
+    const test = await Test.findById(testId);
+    const candidat = await mongoose.model('User').findById(candidatId);
+
+    if (!test) {
+      return res.status(404).json({ message: "Test introuvable" });
+    }
+
+    if (!candidat) {
+      return res.status(404).json({ message: "Candidat introuvable" });
+    }
+
+    // Vérifier si le test n'est pas déjà assigné/passé
+    const existingResult = await TestResult.findOne({ 
+      candidat: candidatId, 
+      test: testId 
+    });
+
+    if (existingResult) {
+      return res.status(409).json({ 
+        message: "Ce test a déjà été assigné à ce candidat" 
+      });
+    }
+
+    // Créer une entrée TestResult en attente
+    const testResult = await TestResult.create({
+      candidat: candidatId,
+      test: testId,
+      reponses: [],
+      score: 0,
+      status: "assigne", // nouveau statut pour tests assignés
+      assignedAt: Date.now()
+    });
+
+    // 🔔 DÉCLENCHER NOTIFICATION nouveau test assigné
+    try {
+      await NotificationService.creerNotificationNouveauTestAssigne(test, candidat);
+      console.log('Notification nouveau test assigné envoyée');
+    } catch (error) {
+      console.error('Erreur notification test assigné:', error);
+    }
+
+    res.status(200).json({
+      message: "Test assigné avec succès",
+      test: {
+        id: test._id,
+        titre: test.titre,
+        duree: test.duree
+      },
+      candidat: {
+        id: candidat._id,
+        nom: candidat.nom,
+        prenoms: candidat.prenoms
+      },
+      assignement: testResult._id
+    });
+
+  } catch (error) {
+    console.error('Erreur assignation test:', error);
+    res.status(500).json({
+      message: "Erreur lors de l'assignation du test",
+      error: error.message
+    });
+  }
+};
+
+/**
+ * 🔔 Envoyer un rappel de test
+ */
+export const sendTestReminder = async (req, res) => {
+  try {
+    const { testResultId } = req.params;
+    
+    const testResult = await TestResult.findById(testResultId)
+      .populate('candidat', 'nom prenoms email')
+      .populate('test', 'titre duree');
+
+    if (!testResult) {
+      return res.status(404).json({ message: "Test result introuvable" });
+    }
+
+    if (testResult.status !== "assigne" && testResult.status !== "en_cours") {
+      return res.status(400).json({ 
+        message: "Le test a déjà été terminé" 
+      });
+    }
+
+    // Calculer le temps restant
+    const now = Date.now();
+    const assignedTime = testResult.assignedAt || testResult.startedAt;
+    const dureeLimite = testResult.test.duree * 60 * 1000; // en millisecondes
+    const tempsEcoule = now - assignedTime;
+    const tempsRestant = Math.max(0, dureeLimite - tempsEcoule);
+    
+    const heuresRestantes = Math.floor(tempsRestant / (1000 * 60 * 60));
+    const minutesRestantes = Math.floor((tempsRestant % (1000 * 60 * 60)) / (1000 * 60));
+    
+    let tempsRestantText = "";
+    if (heuresRestantes > 0) {
+      tempsRestantText = `${heuresRestantes}h ${minutesRestantes}min`;
+    } else {
+      tempsRestantText = `${minutesRestantes} minutes`;
+    }
+
+    // 🔔 DÉCLENCHER NOTIFICATION rappel de test
+    try {
+      await NotificationService.creerNotificationRappelTest(
+        testResult.test, 
+        testResult.candidat, 
+        tempsRestantText
+      );
+      console.log('Notification rappel test envoyée');
+    } catch (error) {
+      console.error('Erreur notification rappel test:', error);
+    }
+
+    res.status(200).json({
+      message: "Rappel de test envoyé",
+      candidat: `${testResult.candidat.prenoms} ${testResult.candidat.nom}`,
+      test: testResult.test.titre,
+      tempsRestant: tempsRestantText
+    });
+
+  } catch (error) {
+    console.error('Erreur rappel test:', error);
+    res.status(500).json({
+      message: "Erreur lors de l'envoi du rappel",
+      error: error.message
+    });
   }
 };

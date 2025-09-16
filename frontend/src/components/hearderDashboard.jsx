@@ -1,14 +1,53 @@
+import { useState, useEffect } from "react";
 import { FiBell, FiLogOut, FiMenu } from "react-icons/fi";
 import { useAuth } from "../contexts/authContext";
 import { useNavigate } from "react-router-dom";
 
 export default function Header({ title, subtitle, onMenuClick, isDashboard = false }) {
-  const { logout } = useAuth();
+  const { logout, token } = useAuth();
   const navigate = useNavigate();
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [loading, setLoading] = useState(false);
+
+  // Récupérer le nombre de notifications non lues
+  useEffect(() => {
+    if (!token) return;
+
+    const fetchUnreadCount = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch("http://localhost:5000/api/notifications/unread-count", {
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json"
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setUnreadCount(data.count);
+        }
+      } catch (error) {
+        console.error("Erreur récupération notifications:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUnreadCount();
+    
+    // Actualiser toutes les 30 secondes
+    const interval = setInterval(fetchUnreadCount, 30000);
+    return () => clearInterval(interval);
+  }, [token]);
 
   const handleLogout = () => {
-    logout();           // Supprime le token et l'utilisateur du localStorage
-    navigate("/");      // Redirige vers la page d'accueil
+    logout();
+    navigate("/");
+  };
+
+  const handleNotificationClick = () => {
+    navigate("/admin/notifications");
   };
 
   return (
@@ -40,8 +79,19 @@ export default function Header({ title, subtitle, onMenuClick, isDashboard = fal
         </div>
 
         <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-          <button className="p-1 sm:p-2 rounded hover:bg-gray-100" aria-label="Notifications">
+          {/* Bouton de notifications avec badge */}
+          <button 
+            onClick={handleNotificationClick}
+            className="p-1 sm:p-2 rounded hover:bg-gray-100 relative"
+            aria-label="Notifications"
+            disabled={loading}
+          >
             <FiBell className="text-base sm:text-lg" style={{ color: "#026530" }} />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            )}
           </button>
 
           {/* Bouton de déconnexion */}

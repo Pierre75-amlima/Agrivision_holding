@@ -9,7 +9,7 @@ import candidatRoutes from './routes/candidateRoutes.js';
 import testRoutes from './routes/testRoutes.js';
 import testResultRoutes from "./routes/testResultRoutes.js";
 import infoPostEntretienRoutes from "./routes/infoPostentretienRoutes.js";
-
+import notificationRoutes from "./routes/notificationRoute.js";
 
 
 
@@ -37,7 +37,7 @@ app.use('/api/candidats', candidatRoutes);
 app.use("/api/tests", testRoutes);
 app.use("/api/testResults", testResultRoutes);
 app.use("/api/info-post-entretien", infoPostEntretienRoutes);
-
+app.use("/api/notifications", notificationRoutes);
 
 
 

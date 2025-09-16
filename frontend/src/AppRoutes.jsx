@@ -15,7 +15,8 @@ import AllOffres from './pages/allOffres';
 import InfoPosteEntretien from './pages/infoPostEntretien';
 import TestPage from './pages/testResultPage';
 import ChangePassword from './pages/changePassword'; 
-
+import Notifications from "./pages/notification";
+import AboutPage from './pages/AboutPage';
 
 const AppRoutes = () => {
   return (
@@ -28,7 +29,7 @@ const AppRoutes = () => {
         <Route path="/infoPosteEntretien/:candidatureId" element={<InfoPosteEntretien />} />
         <Route path="/testResults/:offreId" element={<TestPage />} />
         <Route path="/change-password" element={<ChangePassword />} />
-
+         <Route path="/about" element={<AboutPage />} />
         
 
         {/* Admin - Protégé */}
@@ -37,6 +38,7 @@ const AppRoutes = () => {
           <Route path="/admin/candidatures" element={<Candidatures />} />
           <Route path="/admin/offres" element={<Offres />} />
           <Route path="/admin/tests" element={<Tests />} />
+          <Route path="/admin/notifications" element={<Notifications />} />
 
           {/* 🔹 Nouvelle route pour voir les candidatures liées à une offre */}
           <Route path="/admin/offres/:id/candidatures" element={<CandidaturesOffre />} />

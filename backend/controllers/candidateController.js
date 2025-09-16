@@ -2,9 +2,10 @@ import mongoose from "mongoose";
 import Candidate from "../models/candidate.js";
 import Offre from "../models/offre.js";
 import { getCloudinaryUrl } from "../config/cloudinary.js";
+import NotificationService from "../services/notificationService.js";
 
 /**
- * ➕ Créer ou mettre à jour une candidature (user + offre)
+ * ➕ Créer ou mettre à jour une candidature (user + offre) avec notifications
  */
 export const createOrUpdateCandidate = async (req, res) => {
   try {
@@ -47,21 +48,119 @@ export const createOrUpdateCandidate = async (req, res) => {
 
     // Vérifier si candidature existante
     let candidate = await Candidate.findOne({ user: userId, offre: offreId });
+    let isNewCandidate = false;
 
     if (candidate) {
       Object.assign(candidate, body);
       candidate.dateSoumission = Date.now();
       await candidate.save();
-      return res.status(200).json(candidate);
     } else {
       candidate = new Candidate({ ...body, user: userId, offre: offreId });
       await candidate.save();
-      return res.status(201).json(candidate);
+      isNewCandidate = true;
     }
+
+    // Populate les données pour les notifications
+    await candidate.populate([
+      { path: 'user', select: 'nom prenoms email' },
+      { path: 'offre', select: 'titre description' }
+    ]);
+
+    // 🔔 DÉCLENCHER NOTIFICATION pour nouvelle candidature
+    if (isNewCandidate) {
+      try {
+        await NotificationService.creerNotificationNouvelleCandidature(candidate);
+        console.log('Notification nouvelle candidature envoyée');
+      } catch (error) {
+        console.error('Erreur notification nouvelle candidature:', error);
+        // Ne pas faire échouer la création de candidature si la notification échoue
+      }
+    }
+
+    return res.status(isNewCandidate ? 201 : 200).json(candidate);
 
   } catch (error) {
     console.error('Erreur dans createOrUpdateCandidate :', error);
     return res.status(500).json({ message: "Erreur lors de l'enregistrement", error: error.message || error });
+  }
+};
+
+/**
+ * ✅ Accepter une candidature avec notification
+ */
+export const acceptCandidate = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const candidate = await Candidate.findById(id)
+      .populate('user', 'nom prenoms email')
+      .populate('offre', 'titre description');
+
+    if (!candidate) {
+      return res.status(404).json({ message: "Candidature non trouvée" });
+    }
+
+    candidate.statut = "Accepté";
+    await candidate.save();
+
+    // 🔔 DÉCLENCHER NOTIFICATION candidature acceptée
+    try {
+      await NotificationService.creerNotificationCandidatureAcceptee(candidate);
+      console.log('Notification candidature acceptée envoyée');
+    } catch (error) {
+      console.error('Erreur notification candidature acceptée:', error);
+    }
+
+    res.status(200).json({ 
+      message: "Candidature acceptée", 
+      candidate 
+    });
+  } catch (error) {
+    console.error('Erreur acceptation candidature:', error);
+    res.status(500).json({ 
+      message: "Erreur lors de l'acceptation", 
+      error: error.message 
+    });
+  }
+};
+
+/**
+ * ❌ Rejeter une candidature avec notification
+ */
+export const rejectCandidate = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { motif } = req.body;
+    
+    const candidate = await Candidate.findById(id)
+      .populate('user', 'nom prenoms email')
+      .populate('offre', 'titre description');
+
+    if (!candidate) {
+      return res.status(404).json({ message: "Candidature non trouvée" });
+    }
+
+    candidate.statut = "Rejeté";
+    if (motif) candidate.motifRejet = motif;
+    await candidate.save();
+
+    // 🔔 DÉCLENCHER NOTIFICATION candidature rejetée
+    try {
+      await NotificationService.creerNotificationCandidatureRejetee(candidate, motif);
+      console.log('Notification candidature rejetée envoyée');
+    } catch (error) {
+      console.error('Erreur notification candidature rejetée:', error);
+    }
+
+    res.status(200).json({ 
+      message: "Candidature rejetée", 
+      candidate 
+    });
+  } catch (error) {
+    console.error('Erreur rejet candidature:', error);
+    res.status(500).json({ 
+      message: "Erreur lors du rejet", 
+      error: error.message 
+    });
   }
 };
 
