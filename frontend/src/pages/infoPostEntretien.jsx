@@ -42,7 +42,7 @@ export default function InfoPostEntretien() {
       try {
         setDataLoading(true);
         const res = await fetch(
-          `http://localhost:5000/api/candidats/user/${user._id || user.id}`,
+          `http://agrivision-holding.onrender.com/api/candidats/user/${user._id || user.id}`,
           {
             method: "GET",
             headers: {
@@ -240,7 +240,7 @@ export default function InfoPostEntretien() {
         form.append("signature", blob, "signature.png");
       }
 
-      const res = await fetch("http://localhost:5000/api/info-post-entretien/", {
+      const res = await fetch("https://agrivision-holding.onrender.com/api/info-post-entretien/", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: form,

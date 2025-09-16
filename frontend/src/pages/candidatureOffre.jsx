@@ -14,7 +14,10 @@ export default function CandidaturesOffre() {
         const start = Date.now();
 
         const token = localStorage.getItem("token");
-        const res = await fetch(`http://localhost:5000/api/candidats/offre/${id}`, {
+
+        // ✅ Utilisation des backticks pour l'interpolation
+        // ✅ Ou proxy Vite si tu préfères
+        const res = await fetch(`/api/candidats/offre/${id}`, {
           headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${token}`,
@@ -28,7 +31,6 @@ export default function CandidaturesOffre() {
         // Minimum 500ms pour voir le skeleton
         const elapsed = Date.now() - start;
         if (elapsed < 500) await new Promise((r) => setTimeout(r, 500 - elapsed));
-
       } catch (error) {
         console.error("Erreur lors du chargement des candidatures :", error);
       } finally {
@@ -55,8 +57,7 @@ export default function CandidaturesOffre() {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {loading
-          ? // Afficher 6 skeletons pendant le chargement
-            Array.from({ length: 6 }).map((_, idx) => <SkeletonCard key={idx} />)
+          ? Array.from({ length: 6 }).map((_, idx) => <SkeletonCard key={idx} />)
           : candidatures.length === 0
           ? <p>Aucune candidature pour cette offre.</p>
           : candidatures.map((candidat) => (

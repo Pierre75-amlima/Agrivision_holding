@@ -64,7 +64,7 @@ export default function Notifications() {
         ...(selectedFilter !== "ALL" && { statut: selectedFilter })
       });
 
-      const response = await fetch(`http://localhost:5000/api/notifications?${params}`, {
+      const response = await fetch("https://agrivision-holding.onrender.com//api/notifications?${params}`, {
         headers: {
           "Authorization": `Bearer ${token}`,
           "Content-Type": "application/json"
@@ -85,7 +85,7 @@ export default function Notifications() {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch("http://localhost:5000/api/notifications/stats", {
+      const response = await fetch("https://agrivision-holding.onrender.com/api/notifications/stats", {
         headers: {
           "Authorization": `Bearer ${token}`,
           "Content-Type": "application/json"
@@ -104,7 +104,7 @@ export default function Notifications() {
   // Marquer comme lue
   const markAsRead = async (id) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/notifications/${id}/read`, {
+      const response = await fetch("https://agrivision-holding.onrender.com//api/notifications/${id}/read`, {
         method: "PUT",
         headers: {
           "Authorization": `Bearer ${token}`,
@@ -127,7 +127,7 @@ export default function Notifications() {
   // Marquer toutes comme lues
   const markAllAsRead = async () => {
     try {
-      const response = await fetch("http://localhost:5000/api/notifications/mark-all-read", {
+      const response = await fetch("https://agrivision-holding.onrender.com/api/notifications/mark-all-read", {
         method: "PUT",
         headers: {
           "Authorization": `Bearer ${token}`,
@@ -148,7 +148,7 @@ export default function Notifications() {
   // Archiver une notification
   const archiveNotification = async (id) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/notifications/${id}/archive`, {
+      const response = await fetch("https://agrivision-holding.onrender.com//api/notifications/${id}/archive`, {
         method: "PUT",
         headers: {
           "Authorization": `Bearer ${token}`,
@@ -167,7 +167,7 @@ export default function Notifications() {
   // Supprimer une notification
   const deleteNotification = async (id) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/notifications/${id}`, {
+      const response = await fetch("https://agrivision-holding.onrender.com//api/notifications/${id}`, {
         method: "DELETE",
         headers: {
           "Authorization": `Bearer ${token}`,

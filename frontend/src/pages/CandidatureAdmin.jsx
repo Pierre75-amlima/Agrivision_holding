@@ -73,7 +73,7 @@ export default function Candidatures() {
         params.append('minExperienceMonths', searchFilters.minExperienceMonths);
       }
 
-      const url = `http://localhost:5000/api/candidats${params.toString() ? '?' + params.toString() : ''}`;
+      const url = `http://agrivision-holding.onrender.com/api/candidats${params.toString() ? '?' + params.toString() : ''}`;
       
       const res = await fetch(url, {
         headers: {
@@ -98,7 +98,7 @@ export default function Candidatures() {
   // Fonction pour charger tous les candidats (fallback)
   const fetchAllCandidats = useCallback(async () => {
     try {
-      const res = await fetch("http://localhost:5000/api/candidats", {
+      const res = await fetch("https://agrivision-holding.onrender.com/api/candidats", {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
@@ -118,7 +118,7 @@ export default function Candidatures() {
   const handleSingleDelete = async (candidatId) => {
     try {
       setDeleting(true);
-      const res = await fetch(`http://localhost:5000/api/candidats/${candidatId}`, {
+      const res = await fetch(`https://agrivision-holding.onrender.com//api/candidats/${candidatId}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -143,7 +143,7 @@ export default function Candidatures() {
   const handleBulkDelete = async () => {
     try {
       setDeleting(true);
-      const res = await fetch('http://localhost:5000/api/candidats/bulk-delete', {
+      const res = await fetch('http://agrivision-holding.onrender.com/api/candidats/bulk-delete', {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${token}`,
