@@ -51,7 +51,7 @@ export default function CandidatureDetail() {
       setLoading(true);
       try {
         // 1️⃣ Récupérer la candidature
-        const resC = await fetch("https://agrivision-holding.onrender.com//api/candidats/${id}`, {
+        const resC = await fetch(`https://agrivision-holding.onrender.com//api/candidats/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!resC.ok) throw new Error("Candidature introuvable");
