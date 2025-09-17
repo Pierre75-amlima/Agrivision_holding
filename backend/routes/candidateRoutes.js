@@ -16,10 +16,12 @@ import { verifyToken } from '../middlewares/auth.js';
 
 const router = express.Router();
 
-// Ajoutez cette ligne AVANT votre route POST existante
-router.post('/test', verifyToken, (req, res) => {
-  console.log('Route test simple atteinte');
-  res.json({ message: 'Test simple réussi' });
+
+
+router.post('/test-multer', verifyToken, upload.single('cv'), (req, res) => {
+  console.log('Route test avec Multer atteinte');
+  console.log('Fichier reçu:', !!req.file);
+  res.json({ message: 'Test Multer réussi', hasFile: !!req.file });
 });
 
 // ➕ Création ou mise à jour
