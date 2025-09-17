@@ -60,31 +60,32 @@ export const createOrUpdateCandidate = async (req, res) => {
     console.log('Competences type:', typeof body.competences, 'Value:', JSON.stringify(body.competences, null, 2));
     console.log('Experiences type:', typeof body.experiences, 'Value:', JSON.stringify(body.experiences, null, 2));
 
-    // CORRECTION : CV uploadé
-    console.log('=== TRAITEMENT FICHIER CV ===');
-    if (req.file) {
-      console.log('Processing uploaded file...');
-      console.log('File object keys:', Object.keys(req.file));
-      console.log('File secure_url:', req.file.secure_url);
-      console.log('File public_id:', req.file.public_id);
-      console.log('File mimetype:', req.file.mimetype);
-
-      // UTILISER DIRECTEMENT L'URL SÉCURISÉE DE CLOUDINARY
-      if (req.file.secure_url) {
-        body.cvUrl = req.file.secure_url;
-        console.log('Using secure_url:', body.cvUrl);
-      } else if (req.file.public_id) {
-        console.log('secure_url not available, generating from public_id');
-        const resourceType = req.file.mimetype === 'application/pdf' ? 'raw' : 'image';
-        body.cvUrl = getCloudinaryUrl(req.file.public_id, resourceType);
-        console.log('Generated CV URL:', body.cvUrl);
-      } else {
-        console.error('Neither secure_url nor public_id available in file object');
-        return res.status(400).json({ message: "Erreur lors de l'upload du CV - URL manquante" });
-      }
-    } else {
-      console.log('No file uploaded');
-    }
+   // TRAITEMENT FICHIER CV - VERSION SIMPLE
+console.log('=== TRAITEMENT FICHIER CV ===');
+if (req.file) {
+  console.log('Fichier reçu, analyse...');
+  console.log('Toutes les propriétés du fichier:', Object.keys(req.file));
+  
+  // Essayer toutes les possibilités d'URL
+  if (req.file.secure_url) {
+    body.cvUrl = req.file.secure_url;
+    console.log('URL trouvée:', body.cvUrl);
+  } else if (req.file.url) {
+    body.cvUrl = req.file.url;
+    console.log('URL alternative trouvée:', body.cvUrl);
+  } else if (req.file.public_id) {
+    body.cvUrl = `https://res.cloudinary.com/${process.env.CLOUDINARY_CLOUD_NAME}/raw/upload/${req.file.public_id}`;
+    console.log('URL construite:', body.cvUrl);
+  } else {
+    console.error('AUCUNE URL TROUVÉE DANS LE FICHIER');
+    console.log('Contenu du fichier:', JSON.stringify(req.file, null, 2));
+    return res.status(400).json({ 
+      message: "Erreur: impossible de récupérer l'URL du CV" 
+    });
+  }
+} else {
+  console.log('Aucun fichier reçu');
+}
 
     console.log('=== VERIFICATION USER ===');
     // Attacher l'utilisateur
