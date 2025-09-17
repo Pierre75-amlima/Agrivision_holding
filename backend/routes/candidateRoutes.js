@@ -19,10 +19,23 @@ const router = express.Router();
 
 
 router.post('/test-multer', verifyToken, upload.single('cv'), (req, res) => {
-  console.log('Route test avec Multer atteinte');
-  console.log('Fichier reçu:', !!req.file);
-  res.json({ message: 'Test Multer réussi', hasFile: !!req.file });
+  console.log('--- TEST MULTER ---');
+  console.log('Headers reçus Content-Type:', req.headers['content-type']);
+  console.log('Body keys:', Object.keys(req.body || {}));
+  console.log('Fichier reçu:', req.file ? {
+    originalname: req.file.originalname,
+    mimetype: req.file.mimetype,
+    size: req.file.size,
+    path: req.file.path
+  } : null);
+
+  res.json({ 
+    message: 'Test Multer terminé', 
+    hasFile: !!req.file,
+    file: req.file ? req.file.originalname : null
+  });
 });
+
 
 // ➕ Création ou mise à jour
 router.post('/', verifyToken, upload.single('cv'), createOrUpdateCandidate);
