@@ -16,6 +16,12 @@ import { verifyToken } from '../middlewares/auth.js';
 
 const router = express.Router();
 
+// Ajoutez cette ligne AVANT votre route POST existante
+router.post('/test', verifyToken, (req, res) => {
+  console.log('Route test simple atteinte');
+  res.json({ message: 'Test simple réussi' });
+});
+
 // ➕ Création ou mise à jour
 router.post('/', verifyToken, upload.single('cv'), createOrUpdateCandidate);
 router.put('/:id', verifyToken, upload.single('cv'), createOrUpdateCandidate);
