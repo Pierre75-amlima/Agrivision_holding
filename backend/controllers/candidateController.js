@@ -110,7 +110,9 @@ export const createOrUpdateCandidate = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('=== ERREUR DANS createOrUpdateCandidate ===', error);
+    console.error('=== ERREUR DANS createOrUpdateCandidate ===');
+console.error('Error message:', error.message);
+console.error('Error stack:', error.stack);
     return res.status(500).json({
       message: "Erreur lors de l'enregistrement",
       error: error.message || error.toString()
