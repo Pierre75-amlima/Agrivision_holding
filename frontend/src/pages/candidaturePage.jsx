@@ -28,7 +28,7 @@ export default function CandidaturePage() {
   useEffect(() => {
     const fetchOffre = async () => {
       try {
-        const res = await fetch(`https://agrivision-holding.onrender.com//api/offres/${offreId}`);
+        const res = await fetch(`https://agrivision-holding.onrender.com/api/offres/${offreId}`);
         const data = await res.json();
         setOffreTitre(data.titre || 'Offre');
       } catch (err) {
