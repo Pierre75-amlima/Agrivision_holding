@@ -9,187 +9,110 @@ import NotificationService from "../services/notificationService.js";
  */
 export const createOrUpdateCandidate = async (req, res) => {
   console.log('=== DEBUT createOrUpdateCandidate ===');
-  
+
   try {
     console.log('User ID from token:', req.userId);
     console.log('Body keys:', Object.keys(req.body || {}));
     console.log('Body content:', JSON.stringify(req.body, null, 2));
     console.log('File present:', !!req.file);
-    
+
     if (req.file) {
-      console.log('File details:', JSON.stringify({
-        originalname: req.file.originalname,
-        mimetype: req.file.mimetype,
-        size: req.file.size,
-        fieldname: req.file.fieldname,
-        encoding: req.file.encoding
-      }, null, 2));
+      console.log('=== DETAILS FICHIER CLOUDINARY ===');
+      console.log(JSON.stringify(req.file, null, 2)); // ✅ Affiche toutes les propriétés
     }
 
     const body = { ...req.body };
-    console.log('Body after spread:', JSON.stringify(body, null, 2));
 
-    // Parser champs JSON encodés en string (FormData)
-    console.log('=== PARSING JSON FIELDS ===');
-    
+    // Parser competences
     if (body.competences && typeof body.competences === 'string') {
-      console.log('Parsing competences string:', body.competences);
-      try { 
+      try {
         body.competences = JSON.parse(body.competences);
-        console.log('Competences parsed successfully:', JSON.stringify(body.competences, null, 2));
-      } catch (e) { 
-        console.error('Competences parse failed:', e.message);
-        console.error('Raw competences value:', body.competences);
-        return res.status(400).json({ message: "Format invalide pour les compétences", error: e.message });
+      } catch (e) {
+        return res.status(400).json({ message: "Format invalide pour les compétences" });
       }
     }
-    
+
+    // Parser experiences
     if (body.experiences && typeof body.experiences === 'string') {
-      console.log('Parsing experiences string:', body.experiences);
-      try { 
+      try {
         body.experiences = JSON.parse(body.experiences);
-        console.log('Experiences parsed successfully:', JSON.stringify(body.experiences, null, 2));
-      } catch (e) { 
-        console.error('Experiences parse failed:', e.message);
-        console.error('Raw experiences value:', body.experiences);
-        return res.status(400).json({ message: "Format invalide pour les expériences", error: e.message });
+      } catch (e) {
+        return res.status(400).json({ message: "Format invalide pour les expériences" });
       }
     }
 
-    console.log('=== APRES PARSING JSON ===');
-    console.log('Competences type:', typeof body.competences, 'Value:', JSON.stringify(body.competences, null, 2));
-    console.log('Experiences type:', typeof body.experiences, 'Value:', JSON.stringify(body.experiences, null, 2));
-
-   // TRAITEMENT FICHIER CV - VERSION SIMPLE
-console.log('=== TRAITEMENT FICHIER CV ===');
-if (req.file) {
-  console.log('Fichier reçu, analyse...');
-  console.log('Toutes les propriétés du fichier:', Object.keys(req.file));
-  
-  // Essayer toutes les possibilités d'URL
-  if (req.file.secure_url) {
-    body.cvUrl = req.file.secure_url;
-    console.log('URL trouvée:', body.cvUrl);
-  } else if (req.file.url) {
-    body.cvUrl = req.file.url;
-    console.log('URL alternative trouvée:', body.cvUrl);
-  } else if (req.file.public_id) {
-    body.cvUrl = `https://res.cloudinary.com/${process.env.CLOUDINARY_CLOUD_NAME}/raw/upload/${req.file.public_id}`;
-    console.log('URL construite:', body.cvUrl);
-  } else {
-    console.error('AUCUNE URL TROUVÉE DANS LE FICHIER');
-    console.log('Contenu du fichier:', JSON.stringify(req.file, null, 2));
-    return res.status(400).json({ 
-      message: "Erreur: impossible de récupérer l'URL du CV" 
-    });
-  }
-} else {
-  console.log('Aucun fichier reçu');
-}
-
-    console.log('=== VERIFICATION USER ===');
-    // Attacher l'utilisateur
-    if (!body.user) {
-      if (req.userId) {
-        body.user = req.userId;
-        console.log('Using req.userId:', req.userId);
-      } else if (req.user?.id) {
-        body.user = req.user.id;
-        console.log('Using req.user.id:', req.user.id);
+    // === TRAITEMENT FICHIER CV ===
+    if (req.file) {
+      if (req.file.secure_url) {
+        body.cvUrl = req.file.secure_url; // ✅ URL Cloudinary directe
+      } else if (req.file.url) {
+        body.cvUrl = req.file.url;
+      } else if (req.file.path) {
+        // parfois CloudinaryStorage met `path` = secure_url
+        body.cvUrl = req.file.path;
+      } else if (req.file.public_id) {
+        body.cvUrl = `https://res.cloudinary.com/${process.env.CLOUDINARY_CLOUD_NAME}/raw/upload/${req.file.public_id}`;
       } else {
-        console.error('No user ID found in request');
-        return res.status(401).json({ message: "Utilisateur non authentifié" });
+        return res.status(400).json({ message: "Impossible de récupérer l'URL du CV" });
       }
+      console.log('✅ CV URL sauvegardée:', body.cvUrl);
     }
 
-    console.log('Final user ID:', body.user);
-    console.log('Offre ID from body:', body.offre);
+    // Vérification user
+    if (!body.user) {
+      if (req.userId) body.user = req.userId;
+      else if (req.user?.id) body.user = req.user.id;
+      else return res.status(401).json({ message: "Utilisateur non authentifié" });
+    }
 
-    // Validation des ObjectId
+    // Vérification IDs
     let userId, offreId;
     try {
       userId = new mongoose.Types.ObjectId(body.user);
       offreId = new mongoose.Types.ObjectId(body.offre);
-      console.log('ObjectIds created successfully');
-      console.log('userId ObjectId:', userId);
-      console.log('offreId ObjectId:', offreId);
     } catch (error) {
-      console.error('Error creating ObjectIds:', error.message);
       return res.status(400).json({ message: "IDs invalides", error: error.message });
     }
 
-    console.log('=== RECHERCHE CANDIDATURE EXISTANTE ===');
-    // Vérifier si candidature existante
+    // Vérifier si candidature existe déjà
     let candidate = await Candidate.findOne({ user: userId, offre: offreId });
     let isNewCandidate = false;
 
     if (candidate) {
-      console.log('Candidature existante trouvée, mise à jour...');
-      console.log('Candidate ID:', candidate._id);
-      
       Object.assign(candidate, body);
       candidate.dateSoumission = Date.now();
-      
-      console.log('Sauvegarde de la candidature mise à jour...');
       await candidate.save();
-      console.log('Candidature mise à jour sauvegardée');
     } else {
-      console.log('Nouvelle candidature, création...');
-      console.log('Data to create:', JSON.stringify({ ...body, user: userId, offre: offreId }, null, 2));
-      
       candidate = new Candidate({ ...body, user: userId, offre: offreId });
-      
-      console.log('Sauvegarde de la nouvelle candidature...');
       await candidate.save();
-      console.log('Nouvelle candidature sauvegardée avec ID:', candidate._id);
       isNewCandidate = true;
     }
 
-    console.log('=== POPULATION DES DONNEES ===');
-    // Populate les données pour les notifications
+    // Populate
     await candidate.populate([
       { path: 'user', select: 'nom prenoms email' },
       { path: 'offre', select: 'titre description' }
     ]);
-    console.log('Population terminée');
-    console.log('User populated:', JSON.stringify(candidate.user, null, 2));
-    console.log('Offre populated:', JSON.stringify(candidate.offre, null, 2));
 
-    console.log('=== NOTIFICATION ===');
-    // 🔔 DÉCLENCHER NOTIFICATION pour nouvelle candidature
+    // Notification
     if (isNewCandidate) {
       try {
-        console.log('Envoi notification nouvelle candidature...');
         await NotificationService.creerNotificationNouvelleCandidature(candidate);
-        console.log('Notification nouvelle candidature envoyée avec succès');
       } catch (error) {
         console.error('Erreur notification nouvelle candidature:', error.message);
-        console.error('Stack trace notification:', error.stack);
-        // Ne pas faire échouer la création de candidature si la notification échoue
       }
-    } else {
-      console.log('Candidature mise à jour, pas de notification');
     }
 
-    console.log('=== SUCCESS RESPONSE ===');
-    console.log('Returning candidate with ID:', candidate._id);
-    console.log('Status code:', isNewCandidate ? 201 : 200);
-    
     return res.status(isNewCandidate ? 201 : 200).json({
       message: isNewCandidate ? "Candidature créée avec succès" : "Candidature mise à jour avec succès",
       candidate: candidate,
-      _id: candidate._id // Ajouté pour compatibility avec le frontend
+      _id: candidate._id
     });
 
   } catch (error) {
-    console.error('=== ERREUR DANS createOrUpdateCandidate ===');
-    console.error('Error type:', error.constructor.name);
-    console.error('Error message:', error.message);
-    console.error('Error stack:', error.stack);
-    console.error('================================================');
-    
-    return res.status(500).json({ 
-      message: "Erreur lors de l'enregistrement", 
+    console.error('=== ERREUR DANS createOrUpdateCandidate ===', error);
+    return res.status(500).json({
+      message: "Erreur lors de l'enregistrement",
       error: error.message || error.toString()
     });
   }
