@@ -24,4 +24,20 @@ export const upload = multer({
   limits: { fileSize: 5000000 }
 });
 
+// Configuration Multer BASIC (stockage en mémoire)
+const memoryStorage = multer.memoryStorage();
+
+export const uploadMemory = multer({
+  storage: memoryStorage,
+  limits: { fileSize: 5000000 },
+  fileFilter: (req, file, cb) => {
+    console.log('Memory storage - File:', file.originalname);
+    if (file.mimetype === 'application/pdf') {
+      cb(null, true);
+    } else {
+      cb(new Error('PDF seulement'), false);
+    }
+  }
+});
+
 export { cloudinary, storage };

@@ -11,7 +11,7 @@ import {
   acceptCandidate,
   rejectCandidate
 } from '../controllers/candidateController.js';
-import { upload } from '../config/cloudinary.js';
+import { upload, uploadMemory } from '../config/cloudinary.js';
 import { verifyToken } from '../middlewares/auth.js';
 
 const router = express.Router();
@@ -36,6 +36,16 @@ router.post('/test-multer', verifyToken, upload.single('cv'), (req, res) => {
   });
 });
 
+
+// Ajoutez cette route de test
+router.post('/test-memory', verifyToken, uploadMemory.single('cv'), (req, res) => {
+  console.log('Test memory storage atteint');
+  console.log('Buffer size:', req.file ? req.file.buffer.length : 0);
+  res.json({ 
+    message: 'Test memory OK', 
+    fileSize: req.file ? req.file.buffer.length : 0 
+  });
+});
 
 // ➕ Création ou mise à jour
 router.post('/', verifyToken, upload.single('cv'), createOrUpdateCandidate);
