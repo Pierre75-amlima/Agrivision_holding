@@ -120,7 +120,7 @@ export default function LoginForm({ switchToSignup, onClose, offreId }) {
             {showPassword ? <FaEye /> : <FaEyeSlash />}
           </span>
         </div>
-          <button
+          {/* <button
   type="button"
     onClick={() => {
     if (typeof closeModal === "function") closeModal(); // 🔹 ferme le modal
@@ -129,7 +129,7 @@ export default function LoginForm({ switchToSignup, onClose, offreId }) {
   className="text-[#DC143C] text-sm font-semibold underline mt-2"
 >
   Mot de passe oublié ?
-</button>
+</button> */}
         <button
           type="submit"
           disabled={loading}
