@@ -25,11 +25,11 @@ export default function InfoPostEntretien() {
   const [dataLoading, setDataLoading] = useState(true);
   const sigPadRef = useRef();
 
-  // 🔹 Fonction pour valider et formater les numéros de téléphone (8 chiffres max)
+  // 🔹 Fonction pour valider et formater les numéros de téléphone (max 10 chiffres)
   const handlePhoneInput = (value) => {
     let numericValue = value.replace(/\D/g, "");
-    if (numericValue.length > 8) {
-      numericValue = numericValue.slice(0, 8);
+    if (numericValue.length > 10) {
+      numericValue = numericValue.slice(0, 10);
     }
     return numericValue;
   };
@@ -41,8 +41,10 @@ export default function InfoPostEntretien() {
 
       try {
         setDataLoading(true);
+        console.log("Récupération des données pour user:", user._id || user.id);
+
         const res = await fetch(
-          `http://agrivision-holding.onrender.com/api/candidats/user/${user._id || user.id}`,
+          `https://agrivision-holding.onrender.com/api/candidats/user/${user._id || user.id}`,
           {
             method: "GET",
             headers: {
@@ -54,18 +56,40 @@ export default function InfoPostEntretien() {
 
         if (res.ok) {
           const candidatures = await res.json();
+          console.log("Candidatures récupérées:", candidatures);
+
           if (candidatures && candidatures.length > 0) {
-            const derniereCandidature = candidatures[candidatures.length - 1];
-            setFormData((prev) => ({
-              ...prev,
-              telephone: derniereCandidature.telephone || "",
-              adresse: derniereCandidature.adresse || "",
-            }));
-            setIsPhoneFromDB(true); // ✅ Numéro marqué comme venant de la base
+            // Trier par date de soumission pour prendre la plus récente
+            const candidaturesSorted = candidatures.sort(
+              (a, b) =>
+                new Date(b.dateSoumission || b.createdAt) -
+                new Date(a.dateSoumission || a.createdAt)
+            );
+
+            const derniereCandidature = candidaturesSorted[0];
+            console.log("Dernière candidature:", derniereCandidature);
+
+            if (derniereCandidature.telephone || derniereCandidature.adresse) {
+              setFormData((prev) => ({
+                ...prev,
+                telephone:
+                  derniereCandidature.telephone?.replace(/^\+229\s?/, "") || "",
+                adresse: derniereCandidature.adresse || "",
+              }));
+              setIsPhoneFromDB(true);
+              console.log("Données mises à jour:", {
+                telephone: derniereCandidature.telephone,
+                adresse: derniereCandidature.adresse,
+              });
+            }
+          } else {
+            console.log("Aucune candidature trouvée");
           }
+        } else {
+          console.error("Erreur API:", res.status, res.statusText);
         }
       } catch (err) {
-        console.error("❌ Erreur lors de la récupération des données:", err);
+        console.error("Erreur lors de la récupération des données:", err);
       } finally {
         setDataLoading(false);
       }
@@ -81,7 +105,7 @@ export default function InfoPostEntretien() {
   };
 
   const handleTelephoneChange = (e) => {
-    setIsPhoneFromDB(false); // ✅ Dès qu'on tape, ce n'est plus "from DB"
+    setIsPhoneFromDB(false);
     const formattedValue = handlePhoneInput(e.target.value);
     setFormData((prev) => ({ ...prev, telephone: formattedValue }));
   };
@@ -171,18 +195,15 @@ export default function InfoPostEntretien() {
 
   // 🔹 Validation des numéros
   const validatePhoneNumbers = () => {
-    if (!isPhoneFromDB && formData.telephone && formData.telephone.length !== 8) {
-      alert("Le numéro de téléphone principal doit contenir exactement 8 chiffres.");
-      return false;
-    }
-
+    // ✅ PAS DE CONTRÔLE pour le numéro principal
+    // Vérification uniquement pour les contacts d’urgence et les références
     for (let i = 0; i < formData.contactsUrgence.length; i++) {
       const contact = formData.contactsUrgence[i];
-      if (contact.telephone && contact.telephone.length !== 8) {
+      if (contact.telephone && contact.telephone.length !== 10) {
         alert(
           `Le numéro de téléphone du contact d'urgence ${
             i + 1
-          } doit contenir exactement 8 chiffres.`
+          } doit contenir exactement 10 chiffres.`
         );
         return false;
       }
@@ -190,11 +211,11 @@ export default function InfoPostEntretien() {
 
     for (let i = 0; i < formData.references.length; i++) {
       const reference = formData.references[i];
-      if (reference.contact && reference.contact.length !== 8) {
+      if (reference.contact && reference.contact.length !== 10) {
         alert(
           `Le numéro de contact de la référence ${
             i + 1
-          } doit contenir exactement 8 chiffres.`
+          } doit contenir exactement 10 chiffres.`
         );
         return false;
       }
@@ -227,7 +248,10 @@ export default function InfoPostEntretien() {
       form.append("telephone", formData.telephone || "");
       form.append("adresse", formData.adresse || "");
       form.append("consentement", formData.consentement);
-      form.append("contactsUrgence", JSON.stringify(formData.contactsUrgence || []));
+      form.append(
+        "contactsUrgence",
+        JSON.stringify(formData.contactsUrgence || [])
+      );
       form.append("references", JSON.stringify(formData.references || []));
 
       if (formData.photoFile) {
@@ -240,11 +264,14 @@ export default function InfoPostEntretien() {
         form.append("signature", blob, "signature.png");
       }
 
-      const res = await fetch(`https://agrivision-holding.onrender.com/api/info-post-entretien/`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: form,
-      });
+      const res = await fetch(
+        `https://agrivision-holding.onrender.com/api/info-post-entretien/`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: form,
+        }
+      );
 
       if (!res.ok) {
         const errorBody = await res.json().catch(() => ({}));
@@ -264,14 +291,18 @@ export default function InfoPostEntretien() {
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <h1 className="text-2xl font-bold text-[#094363] mb-2">Informations Complémentaires</h1>
+          <h1 className="text-2xl font-bold text-[#094363] mb-2">
+            Informations Complémentaires
+          </h1>
           <p className="text-gray-600">Dernière étape de votre candidature</p>
         </div>
 
         {/* Infos personnelles */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <h2 className="text-lg font-semibold text-[#094363] mb-4">Informations personnelles</h2>
-          
+          <h2 className="text-lg font-semibold text-[#094363] mb-4">
+            Informations personnelles
+          </h2>
+
           {/* Indicateur de chargement des données */}
           {dataLoading && (
             <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
@@ -281,52 +312,72 @@ export default function InfoPostEntretien() {
               </p>
             </div>
           )}
-          
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nom</label>
-              <input value={formData.nom} disabled className="w-full p-3 border border-gray-300 rounded-md bg-gray-50"/>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Nom
+              </label>
+              <input
+                value={formData.nom}
+                disabled
+                className="w-full p-3 border border-gray-300 rounded-md bg-gray-50"
+              />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Prénoms</label>
-              <input value={formData.prenoms} disabled className="w-full p-3 border border-gray-300 rounded-md bg-gray-50"/>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Prénoms
+              </label>
+              <input
+                value={formData.prenoms}
+                disabled
+                className="w-full p-3 border border-gray-300 rounded-md bg-gray-50"
+              />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-              <input value={formData.email} disabled className="w-full p-3 border border-gray-300 rounded-md bg-gray-50"/>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Email
+              </label>
+              <input
+                value={formData.email}
+                disabled
+                className="w-full p-3 border border-gray-300 rounded-md bg-gray-50"
+              />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Téléphone</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Téléphone
+              </label>
               <div className="flex">
-                <span className="flex items-center px-3 bg-[#094363] text-white border border-[#094363] rounded-l-md">+229</span>
-                <input 
-                  value={formData.telephone} 
-                  onChange={handleTelephoneChange} 
-                  placeholder="Téléphone (10 chiffres)"
+                <span className="flex items-center px-3 bg-[#094363] text-white border border-[#094363] rounded-l-md">
+                  +229
+                </span>
+                <input
+                  value={formData.telephone}
+                  onChange={handleTelephoneChange}
+                  placeholder="Téléphone"
                   maxLength={10}
                   className="flex-1 p-3 border border-l-0 border-gray-300 rounded-r-md focus:outline-none focus:border-[#094363]"
                   disabled={dataLoading}
                 />
               </div>
-              {!dataLoading && formData.telephone && formData.telephone.length === 10 && (
-                <p className="text-xs text-green-600 mt-1">✓ Numéro valide</p>
-              )}
-              {!dataLoading && formData.telephone && formData.telephone.length > 0 && formData.telephone.length < 10 && (
-                <p className="text-xs text-red-600 mt-1">⚠ Le numéro doit contenir exactement 10 chiffres</p>
-              )}
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Adresse</label>
-              <input 
-                value={formData.adresse} 
-                name="adresse" 
-                onChange={handleChange} 
-                placeholder="Votre adresse complète" 
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Adresse
+              </label>
+              <input
+                value={formData.adresse}
+                name="adresse"
+                onChange={handleChange}
+                placeholder="Votre adresse complète"
                 className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:border-[#094363]"
                 disabled={dataLoading}
               />
               {!dataLoading && formData.adresse && (
-                <p className="text-xs text-green-600 mt-1">✓ Vos infos ont été récupéré automatiquement</p>
+                <p className="text-xs text-green-600 mt-1">
+                  ✓ Vos infos ont été récupérées automatiquement
+                </p>
               )}
             </div>
           </div>
@@ -335,50 +386,75 @@ export default function InfoPostEntretien() {
         {/* Contacts d'urgence */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-            <h2 className="text-lg font-semibold text-[#094363]">Contacts d'urgence</h2>
-            <button onClick={addContactUrgence} className="px-4 py-2 bg-[#16a34a] text-white rounded-md hover:bg-green-700 text-sm">+ Ajouter</button>
+            <h2 className="text-lg font-semibold text-[#094363]">
+              Contacts d'urgence
+            </h2>
+            <button
+              onClick={addContactUrgence}
+              className="px-4 py-2 bg-[#16a34a] text-white rounded-md hover:bg-green-700 text-sm"
+            >
+              + Ajouter
+            </button>
           </div>
-          
+
           {formData.contactsUrgence.length === 0 ? (
-            <p className="text-gray-500 text-center py-4">Aucun contact d'urgence ajouté</p>
+            <p className="text-gray-500 text-center py-4">
+              Aucun contact d'urgence ajouté
+            </p>
           ) : (
             <div className="space-y-4">
               {formData.contactsUrgence.map((c, i) => (
                 <div key={i} className="border border-gray-200 rounded-md p-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    <input 
-                      value={c.nom} 
-                      onChange={(e) => handleContactUrgenceChange(i, "nom", e.target.value)} 
-                      placeholder="Nom" 
+                    <input
+                      value={c.nom}
+                      onChange={(e) =>
+                        handleContactUrgenceChange(i, "nom", e.target.value)
+                      }
+                      placeholder="Nom"
                       className="p-2 border border-gray-300 rounded-md focus:outline-none focus:border-[#094363]"
                     />
-                    <input 
-                      value={c.prenom} 
-                      onChange={(e) => handleContactUrgenceChange(i, "prenom", e.target.value)} 
-                      placeholder="Prénom" 
+                    <input
+                      value={c.prenom}
+                      onChange={(e) =>
+                        handleContactUrgenceChange(i, "prenom", e.target.value)
+                      }
+                      placeholder="Prénom"
                       className="p-2 border border-gray-300 rounded-md focus:outline-none focus:border-[#094363]"
                     />
-                    <input 
-                      value={c.relation} 
-                      onChange={(e) => handleContactUrgenceChange(i, "relation", e.target.value)} 
-                      placeholder="Relation" 
+                    <input
+                      value={c.relation}
+                      onChange={(e) =>
+                        handleContactUrgenceChange(i, "relation", e.target.value)
+                      }
+                      placeholder="Relation"
                       className="p-2 border border-gray-300 rounded-md focus:outline-none focus:border-[#094363]"
                     />
                     <div className="flex gap-2">
                       <div className="flex-1">
-                        <input 
-                          value={c.telephone} 
-                          onChange={(e) => handleContactUrgenceChange(i, "telephone", e.target.value)} 
-                          placeholder="Téléphone "
+                        <input
+                          value={c.telephone}
+                          onChange={(e) =>
+                            handleContactUrgenceChange(
+                              i,
+                              "telephone",
+                              e.target.value
+                            )
+                          }
+                          placeholder="Téléphone"
                           maxLength={10}
                           className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:border-[#094363]"
                         />
-                        {c.telephone && c.telephone.length > 0 && c.telephone.length < 10 && (
-                          <p className="text-xs text-red-600 mt-1">10 chiffres requis</p>
-                        )}
+                        {c.telephone &&
+                          c.telephone.length > 0 &&
+                          c.telephone.length < 10 && (
+                            <p className="text-xs text-red-600 mt-1">
+                              10 chiffres requis
+                            </p>
+                          )}
                       </div>
-                      <button 
-                        onClick={() => removeContactUrgence(i)} 
+                      <button
+                        onClick={() => removeContactUrgence(i)}
                         className="p-2 bg-red-100 text-red-600 rounded-md hover:bg-red-200"
                       >
                         ×
@@ -394,44 +470,63 @@ export default function InfoPostEntretien() {
         {/* Références */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-            <h2 className="text-lg font-semibold text-[#094363]">Références professionnelles</h2>
-            <button onClick={addReference} className="px-4 py-2 bg-[#16a34a] text-white rounded-md hover:bg-green-700 text-sm">+ Ajouter</button>
+            <h2 className="text-lg font-semibold text-[#094363]">
+              Références professionnelles
+            </h2>
+            <button
+              onClick={addReference}
+              className="px-4 py-2 bg-[#16a34a] text-white rounded-md hover:bg-green-700 text-sm"
+            >
+              + Ajouter
+            </button>
           </div>
-          
+
           {formData.references.length === 0 ? (
-            <p className="text-gray-500 text-center py-4">Aucune référence ajoutée</p>
+            <p className="text-gray-500 text-center py-4">
+              Aucune référence ajoutée
+            </p>
           ) : (
             <div className="space-y-4">
               {formData.references.map((r, i) => (
                 <div key={i} className="border border-gray-200 rounded-md p-4">
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <input 
-                      value={r.nom} 
-                      onChange={(e) => handleReferenceChange(i, "nom", e.target.value)} 
-                      placeholder="Nom complet" 
+                    <input
+                      value={r.nom}
+                      onChange={(e) =>
+                        handleReferenceChange(i, "nom", e.target.value)
+                      }
+                      placeholder="Nom complet"
                       className="p-2 border border-gray-300 rounded-md focus:outline-none focus:border-[#094363]"
                     />
-                    <input 
-                      value={r.poste} 
-                      onChange={(e) => handleReferenceChange(i, "poste", e.target.value)} 
-                      placeholder="Poste" 
+                    <input
+                      value={r.poste}
+                      onChange={(e) =>
+                        handleReferenceChange(i, "poste", e.target.value)
+                      }
+                      placeholder="Poste"
                       className="p-2 border border-gray-300 rounded-md focus:outline-none focus:border-[#094363]"
                     />
                     <div className="flex gap-2">
                       <div className="flex-1">
-                        <input 
-                          value={r.contact} 
-                          onChange={(e) => handleReferenceChange(i, "contact", e.target.value)} 
-                          placeholder="Téléphone "
+                        <input
+                          value={r.contact}
+                          onChange={(e) =>
+                            handleReferenceChange(i, "contact", e.target.value)
+                          }
+                          placeholder="Téléphone"
                           maxLength={10}
                           className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:border-[#094363]"
                         />
-                        {r.contact && r.contact.length > 0 && r.contact.length < 10 && (
-                          <p className="text-xs text-red-600 mt-1">10 chiffres requis</p>
-                        )}
+                        {r.contact &&
+                          r.contact.length > 0 &&
+                          r.contact.length < 10 && (
+                            <p className="text-xs text-red-600 mt-1">
+                              10 chiffres requis
+                            </p>
+                          )}
                       </div>
-                      <button 
-                        onClick={() => removeReference(i)} 
+                      <button
+                        onClick={() => removeReference(i)}
                         className="p-2 bg-red-100 text-red-600 rounded-md hover:bg-red-200"
                       >
                         ×
@@ -444,59 +539,52 @@ export default function InfoPostEntretien() {
           )}
         </div>
 
-        {/* Photo et Signature */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          {/* Photo */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-[#094363] mb-4">Photo d'identité</h2>
-            <input type="file" accept="image/*" onChange={handlePhotoChange} className="w-full p-2 border border-gray-300 rounded-md mb-3"/>
-            {formData.photoPreview && (
-              <div className="flex justify-center">
-                <img src={formData.photoPreview} alt="Aperçu" className="w-24 h-24 object-cover rounded-md border"/>
-              </div>
-            )}
-          </div>
-
-          {/* Signature */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-[#094363] mb-4">Signature électronique</h2>
-            <div className="border border-gray-300 rounded-md mb-3">
-              <SignatureCanvas ref={sigPadRef} penColor="black" canvasProps={{ width: 300, height: 120, className: "w-full h-auto" }}/>
-            </div>
-            <button onClick={clearSignature} className="w-full px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 text-sm">Effacer</button>
-          </div>
+        {/* Consentement */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={formData.consentement}
+              onChange={handleConsent}
+              className="h-4 w-4 text-[#094363] rounded"
+            />
+            <span className="text-gray-700">
+              J'accepte que mes informations soient utilisées dans le cadre du
+              processus de recrutement.
+            </span>
+          </label>
         </div>
 
-        {/* Consentement et Soumission */}
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <div className="flex items-start gap-3 mb-6">
-            <input type="checkbox" checked={formData.consentement} onChange={handleConsent} className="mt-1 w-4 h-4 text-[#094363] border-gray-300 rounded"/>
-            <div>
-              <p className="text-sm text-gray-700">
-                Je consens à l'utilisation de mes informations personnelles dans le cadre de ma candidature.
-              </p>
-            </div>
-          </div>
-          
-          <button onClick={handleSubmit} disabled={loading || !formData.consentement || dataLoading} className={`w-full py-3 px-4 font-medium rounded-md transition-colors ${loading || !formData.consentement || dataLoading ? "bg-gray-300 text-gray-500 cursor-not-allowed" : "bg-[#094363] text-white hover:bg-blue-700"}`}>
-            {loading ? "Enregistrement..." : dataLoading ? "Chargement des données..." : "Finaliser ma candidature"}
+        {/* Actions */}
+        <div className="flex justify-end gap-4">
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            className="px-6 py-3 bg-[#094363] text-white rounded-md hover:bg-[#07314a] disabled:opacity-50"
+          >
+            {loading ? "Envoi en cours..." : "Soumettre"}
           </button>
         </div>
-      </div>
 
-      {/* Popup de succès */}
-      {showSuccessPopup && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 max-w-sm w-full text-center">
-            <div className="w-12 h-12 bg-[#16a34a] rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-white text-xl">✓</span>
+        {/* Popup de succès */}
+        {showSuccessPopup && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-lg p-6 max-w-sm w-full text-center">
+              <div className="text-green-600 text-5xl mb-4">✓</div>
+              <h2 className="text-lg font-semibold mb-2">Succès !</h2>
+              <p className="text-gray-600 mb-4">
+                Vos informations ont été enregistrées avec succès.
+              </p>
+              <button
+                onClick={handleSuccessClose}
+                className="px-4 py-2 bg-[#094363] text-white rounded-md hover:bg-[#07314a]"
+              >
+                Fermer
+              </button>
             </div>
-            <h3 className="text-xl font-semibold text-[#094363] mb-3">Candidature finalisée !</h3>
-            <p className="text-gray-600 mb-4 text-sm">Votre candidature a été soumise avec succès. Vous recevrez une confirmation par email.</p>
-            <button onClick={handleSuccessClose} className="w-full py-2 px-4 bg-[#094363] text-white rounded-md hover:bg-blue-700">Fermer</button>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
