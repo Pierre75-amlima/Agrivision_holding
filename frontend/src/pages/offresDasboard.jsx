@@ -72,7 +72,7 @@ export default function Offres() {
 
     setLoading(true);
     try {
-      const url = offerToEdit ? `https://agrivision-holding.onrender.com/api/offres/${offerToEdit._id}` : "/api/offres";
+      const url = offerToEdit ? `https://agrivision-holding.onrender.com/api/offres/${offerToEdit._id}` : `https://agrivision-holding.onrender.com/api/offres`;
       const method = offerToEdit ? "PUT" : "POST";
       const res = await fetch(url, {
         method,
