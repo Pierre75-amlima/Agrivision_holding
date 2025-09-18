@@ -34,7 +34,7 @@ export default function TestsDashboard() {
 
   const fetchTests = async () => {
     try {
-      const res = await fetch("/api/tests");
+      const res = await fetch(`https://agrivision-holding.onrender.com/api/tests`);
       if (!res.ok) throw new Error("Erreur récupération tests");
       const data = await res.json();
       setTests(data);
@@ -45,7 +45,7 @@ export default function TestsDashboard() {
 
   const fetchOffres = async () => {
     try {
-      const res = await fetch("/api/offres");
+      const res = await fetch(`https://agrivision-holding.onrender.com/api/offres`);
       if (!res.ok) throw new Error("Erreur récupération offres");
       const data = await res.json();
       setOffres(data);
@@ -109,7 +109,7 @@ export default function TestsDashboard() {
     }
 
     try {
-      const res = await fetch("/api/tests", {
+      const res = await fetch(`https://agrivision-holding.onrender.com/api/tests`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -144,7 +144,7 @@ export default function TestsDashboard() {
 
   const handleUpdateTest = async (updatedTest) => {
     try {
-      const res = await fetch(`/api/tests/${updatedTest._id}`, {
+      const res = await fetch(`https://agrivision-holding.onrender.com/api/tests/${updatedTest._id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -164,7 +164,7 @@ export default function TestsDashboard() {
 
   const handleDeleteTest = async (id) => {
     try {
-      const res = await fetch(`/api/tests/${id}`, {
+      const res = await fetch(`https://agrivision-holding.onrender.com/api/tests/${id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });

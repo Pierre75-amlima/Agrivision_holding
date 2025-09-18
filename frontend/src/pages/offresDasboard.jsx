@@ -25,7 +25,7 @@ export default function Offres() {
   useEffect(() => {
     const fetchOffres = async () => {
       try {
-        const res = await fetch("/api/offres");
+        const res = await fetch(`https://agrivision-holding.onrender.com/api/offres`);
         let data = await res.json();
 
         const updatedData = data.map((offre) => {
@@ -72,7 +72,7 @@ export default function Offres() {
 
     setLoading(true);
     try {
-      const url = offerToEdit ? `/api/offres/${offerToEdit._id}` : "/api/offres";
+      const url = offerToEdit ? `https://agrivision-holding.onrender.com/api/offres/${offerToEdit._id}` : "/api/offres";
       const method = offerToEdit ? "PUT" : "POST";
       const res = await fetch(url, {
         method,
@@ -113,7 +113,7 @@ export default function Offres() {
   const handleDelete = async () => {
     if (!offerToDelete) return;
     try {
-      const res = await fetch(`/api/offres/${offerToDelete._id}`, {
+      const res = await fetch(`https://agrivision-holding.onrender.com/api/offres/${offerToDelete._id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
