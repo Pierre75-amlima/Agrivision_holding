@@ -1,162 +1,87 @@
 import mongoose from "mongoose";
 import Candidate from "../models/candidate.js";
 import Offre from "../models/offre.js";
-import { uploadToCloudinary } from "../config/cloudinary.js";
+import { getCloudinaryUrl } from "../config/cloudinary.js";
 import NotificationService from "../services/notificationService.js";
 
 /**
  * ➕ Créer ou mettre à jour une candidature (user + offre) avec notifications
  */
 export const createOrUpdateCandidate = async (req, res) => {
-  console.log('=== DEBUT createOrUpdateCandidate ===');
-  
   try {
-    console.log('User ID from token:', req.userId);
-    console.log('File present:', !!req.file);
-    
     const body = { ...req.body };
 
     // Parser champs JSON encodés en string (FormData)
-    console.log('=== PARSING JSON FIELDS ===');
     if (body.competences && typeof body.competences === 'string') {
-      console.log('Parsing competences:', body.competences);
-      try { 
-        body.competences = JSON.parse(body.competences); 
-        console.log('Competences parsed successfully');
-      } catch (e) { 
-        console.error('Competences parse failed:', e.message);
-        return res.status(400).json({ message: "Format invalide pour les compétences" });
-      }
+      try { body.competences = JSON.parse(body.competences); } catch (e) { console.warn('Competences parse failed:', e.message); }
     }
-    
     if (body.experiences && typeof body.experiences === 'string') {
-      console.log('Parsing experiences:', body.experiences);
-      try { 
-        body.experiences = JSON.parse(body.experiences); 
-        console.log('Experiences parsed successfully');
-      } catch (e) { 
-        console.error('Experiences parse failed:', e.message);
-        return res.status(400).json({ message: "Format invalide pour les expériences" });
-      }
+      try { body.experiences = JSON.parse(body.experiences); } catch (e) { console.warn('Experiences parse failed:', e.message); }
     }
 
-    // NOUVEAU : TRAITEMENT FICHIER CV avec upload direct vers Cloudinary
-    console.log('=== TRAITEMENT FICHIER CV ===');
+    // CORRECTION : CV uploadé
     if (req.file) {
-      console.log('Fichier reçu - Nom:', req.file.originalname);
-      console.log('Taille:', req.file.buffer.length, 'bytes');
-      console.log('Type MIME:', req.file.mimetype);
+      console.log('Fichier uploadé :', req.file);
+      console.log('Public ID :', req.file.public_id);
+      console.log('Secure URL :', req.file.secure_url);
+      console.log('MIME type :', req.file.mimetype);
+
+      // UTILISER DIRECTEMENT L'URL SÉCURISÉE DE CLOUDINARY
+      body.cvUrl = req.file.secure_url;
       
-      try {
-        console.log('Début upload vers Cloudinary...');
-        const cloudinaryResult = await uploadToCloudinary(
-          req.file.buffer, 
-          req.file.originalname, 
-          req.file.mimetype
-        );
-        
-        body.cvUrl = cloudinaryResult.secure_url;
-        console.log('✅ CV uploadé avec succès:', body.cvUrl);
-        
-      } catch (error) {
-        console.error('❌ Erreur upload Cloudinary:', error.message);
-        return res.status(400).json({ 
-          message: "Erreur lors de l'upload du CV", 
-          error: error.message 
-        });
+      // Alternative si secure_url n'est pas disponible :
+      if (!body.cvUrl && req.file.public_id) {
+        const resourceType = req.file.mimetype === 'application/pdf' ? 'raw' : 'image';
+        body.cvUrl = getCloudinaryUrl(req.file.public_id, resourceType);
       }
-    } else {
-      console.log('Aucun fichier reçu');
     }
 
-    console.log('=== VERIFICATION USER ===');
     // Attacher l'utilisateur
     if (!body.user) {
-      if (req.userId) {
-        body.user = req.userId;
-        console.log('Using req.userId:', req.userId);
-      } else if (req.user?.id) {
-        body.user = req.user.id;
-        console.log('Using req.user.id:', req.user.id);
-      } else {
-        console.error('No user ID found');
-        return res.status(401).json({ message: "Utilisateur non authentifié" });
-      }
+      if (req.userId) body.user = req.userId;
+      else if (req.user?.id) body.user = req.user.id;
+      else return res.status(401).json({ message: "Utilisateur non authentifié" });
     }
 
-    console.log('Final user ID:', body.user);
-    console.log('Offre ID:', body.offre);
+    const userId = new mongoose.Types.ObjectId(body.user);
+    const offreId = new mongoose.Types.ObjectId(body.offre);
 
-    // Validation des ObjectId
-    let userId, offreId;
-    try {
-      userId = new mongoose.Types.ObjectId(body.user);
-      offreId = new mongoose.Types.ObjectId(body.offre);
-      console.log('ObjectIds créés avec succès');
-    } catch (error) {
-      console.error('Erreur création ObjectIds:', error.message);
-      return res.status(400).json({ message: "IDs invalides" });
-    }
-
-    console.log('=== RECHERCHE CANDIDATURE EXISTANTE ===');
     // Vérifier si candidature existante
     let candidate = await Candidate.findOne({ user: userId, offre: offreId });
     let isNewCandidate = false;
 
     if (candidate) {
-      console.log('Candidature existante trouvée, mise à jour...');
       Object.assign(candidate, body);
       candidate.dateSoumission = Date.now();
       await candidate.save();
-      console.log('Candidature mise à jour avec succès');
     } else {
-      console.log('Nouvelle candidature, création...');
       candidate = new Candidate({ ...body, user: userId, offre: offreId });
       await candidate.save();
-      console.log('Nouvelle candidature créée avec ID:', candidate._id);
       isNewCandidate = true;
     }
 
-    console.log('=== POPULATION DES DONNEES ===');
     // Populate les données pour les notifications
     await candidate.populate([
       { path: 'user', select: 'nom prenoms email' },
       { path: 'offre', select: 'titre description' }
     ]);
-    console.log('Population terminée');
 
-    console.log('=== NOTIFICATION ===');
-    // DÉCLENCHER NOTIFICATION pour nouvelle candidature
+    // 🔔 DÉCLENCHER NOTIFICATION pour nouvelle candidature
     if (isNewCandidate) {
       try {
-        console.log('Envoi notification nouvelle candidature...');
         await NotificationService.creerNotificationNouvelleCandidature(candidate);
-        console.log('Notification envoyée avec succès');
+        console.log('Notification nouvelle candidature envoyée');
       } catch (error) {
-        console.error('Erreur notification:', error.message);
-        // Ne pas faire échouer la création de candidature
+        console.error('Erreur notification nouvelle candidature:', error);
+        // Ne pas faire échouer la création de candidature si la notification échoue
       }
-    } else {
-      console.log('Candidature mise à jour, pas de notification');
     }
 
-    console.log('=== SUCCESS RESPONSE ===');
-    return res.status(isNewCandidate ? 201 : 200).json({
-      message: isNewCandidate ? "Candidature créée avec succès" : "Candidature mise à jour avec succès",
-      candidate: candidate,
-      _id: candidate._id
-    });
+    return res.status(isNewCandidate ? 201 : 200).json(candidate);
 
   } catch (error) {
-    console.error('=== ERREUR createOrUpdateCandidate ===');
-    console.error('Error type:', error.constructor.name);
-    console.error('Error message:', error.message);
-    console.error('Error stack:', error.stack);
-    
-    return res.status(500).json({ 
-      message: "Erreur lors de l'enregistrement", 
-      error: error.message || error.toString()
-    });
+    console.error('Erreur dans createOrUpdateCandidate :', error);
+    return res.status(500).json({ message: "Erreur lors de l'enregistrement", error: error.message || error });
   }
 };
 
@@ -177,7 +102,7 @@ export const acceptCandidate = async (req, res) => {
     candidate.statut = "Accepté";
     await candidate.save();
 
-    // DÉCLENCHER NOTIFICATION candidature acceptée
+    // 🔔 DÉCLENCHER NOTIFICATION candidature acceptée
     try {
       await NotificationService.creerNotificationCandidatureAcceptee(candidate);
       console.log('Notification candidature acceptée envoyée');
@@ -218,7 +143,7 @@ export const rejectCandidate = async (req, res) => {
     if (motif) candidate.motifRejet = motif;
     await candidate.save();
 
-    // DÉCLENCHER NOTIFICATION candidature rejetée
+    // 🔔 DÉCLENCHER NOTIFICATION candidature rejetée
     try {
       await NotificationService.creerNotificationCandidatureRejetee(candidate, motif);
       console.log('Notification candidature rejetée envoyée');
@@ -240,7 +165,7 @@ export const rejectCandidate = async (req, res) => {
 };
 
 /**
- * Fonction utilitaire pour normaliser les chaînes de recherche
+ * 🔧 Fonction utilitaire pour normaliser les chaînes de recherche
  */
 const normalizeSearchTerm = (term) => {
   if (!term) return '';
@@ -252,21 +177,23 @@ const normalizeSearchTerm = (term) => {
 };
 
 /**
- * Fonction pour créer des variations de mots (singulier/pluriel, terminaisons communes)
+ * 🔧 Fonction pour créer des variations de mots (singulier/pluriel, terminaisons communes)
  */
 const createWordVariations = (word) => {
   const variations = [word];
   const normalized = normalizeSearchTerm(word);
   
+  // Ajouter le mot normalisé s'il est différent
   if (normalized !== word) variations.push(normalized);
   
+  // Gérer les terminaisons communes françaises
   const commonEndings = {
-    'ment': 'eur',
-    'eur': 'ment',
-    'ion': 'er',
-    'er': 'ion',
-    's': '',
-    'x': '',
+    'ment': 'eur', // management -> manageur
+    'eur': 'ment', // manageur -> management
+    'ion': 'er',   // gestion -> gérer
+    'er': 'ion',   // gérer -> gestion
+    's': '',       // pluriels
+    'x': '',       // pluriels
   };
   
   Object.keys(commonEndings).forEach(ending => {
@@ -276,16 +203,16 @@ const createWordVariations = (word) => {
       if (newEnding) {
         variations.push(root + newEnding);
       } else {
-        variations.push(root);
+        variations.push(root); // Pour supprimer s, x
       }
     }
   });
   
-  return [...new Set(variations)];
+  return [...new Set(variations)]; // Supprimer les doublons
 };
 
 /**
- * Récupérer tous les candidats avec filtres dynamiques + populate
+ * 📌 Récupérer tous les candidats avec filtres dynamiques + populate (VERSION TRÈS FLEXIBLE)
  */
 export const getAllCandidates = async (req, res) => {
   try {
@@ -300,6 +227,7 @@ export const getAllCandidates = async (req, res) => {
 
     let matchConditions = {};
 
+    // 🔍 Recherche globale sur nom et prénoms
     if (search && search.trim()) {
       const normalizedSearch = normalizeSearchTerm(search);
       matchConditions.$or = [
@@ -309,16 +237,24 @@ export const getAllCandidates = async (req, res) => {
       ];
     }
 
+    // 🎯 Recherche par poste TRÈS FLEXIBLE
     if (poste && poste.trim()) {
       const normalizedPoste = normalizeSearchTerm(poste);
       const mots = normalizedPoste.split(/\s+/).filter(Boolean);
+      
+      // Créer toutes les variations possibles pour chaque mot
       const allVariations = mots.flatMap(mot => createWordVariations(mot));
       
+      // Au lieu d'exiger TOUS les mots (AND), on cherche si AU MOINS UN mot correspond (OR)
+      // Ou on peut faire un système de score : plus il y a de mots qui correspondent, mieux c'est
       matchConditions.$or = [
+        // Recherche exacte d'abord (priorité haute)
         { "offre.titre": { $regex: normalizedPoste, $options: "i" } },
+        // Puis recherche avec variations
         ...allVariations.map(variation => ({
           "offre.titre": { $regex: variation, $options: "i" }
         })),
+        // Recherche dans la description aussi
         { "offre.description": { $regex: normalizedPoste, $options: "i" } },
         ...allVariations.map(variation => ({
           "offre.description": { $regex: variation, $options: "i" }
@@ -326,8 +262,12 @@ export const getAllCandidates = async (req, res) => {
       ];
     }
 
-    if (statut) matchConditions.statut = statut;
+    // 📌 Statut
+    if (statut) {
+      matchConditions.statut = statut;
+    }
 
+    // 🛠 Compétences TRÈS FLEXIBLES avec variations
     if (competences && competences.trim()) {
       const compArray = competences.split(",").map(c => c.trim()).filter(Boolean);
       const allCompVariations = compArray.flatMap(comp => createWordVariations(comp));
@@ -340,12 +280,14 @@ export const getAllCandidates = async (req, res) => {
       ];
     }
 
+    // 📆 Dates
     if (dateFrom || dateTo) {
       matchConditions.createdAt = {};
       if (dateFrom) matchConditions.createdAt.$gte = new Date(dateFrom);
       if (dateTo) matchConditions.createdAt.$lte = new Date(dateTo);
     }
 
+    // ✅ Test validé
     if (testValide) {
       if (testValide === "oui") {
         matchConditions["testResult.score"] = { $exists: true, $ne: null };
@@ -358,19 +300,24 @@ export const getAllCandidates = async (req, res) => {
       }
     }
 
+    // ⏳ Expérience minimale
     if (minExperienceMonths) {
       matchConditions.experiences = { $elemMatch: { duree: { $gte: Number(minExperienceMonths) } } };
     }
 
     if (Object.keys(matchConditions).length > 0) pipeline.push({ $match: matchConditions });
 
+    // Ajouter un score de pertinence si recherche par poste
     if (poste && poste.trim()) {
       pipeline.push({
         $addFields: {
           searchScore: {
             $add: [
+              // Score pour titre exact
               { $cond: [{ $regexMatch: { input: "$offre.titre", regex: normalizeSearchTerm(poste), options: "i" } }, 10, 0] },
+              // Score pour mots individuels dans titre
               { $cond: [{ $regexMatch: { input: "$offre.titre", regex: poste.split(' ')[0] || '', options: "i" } }, 5, 0] },
+              // Score pour description
               { $cond: [{ $regexMatch: { input: "$offre.description", regex: normalizeSearchTerm(poste), options: "i" } }, 2, 0] }
             ]
           }
@@ -390,7 +337,7 @@ export const getAllCandidates = async (req, res) => {
 };
 
 /**
- * Version alternative simple mais plus flexible
+ * 📌 Version alternative simple mais plus flexible
  */
 export const getAllCandidatesSimple = async (req, res) => {
   try {
@@ -402,11 +349,13 @@ export const getAllCandidatesSimple = async (req, res) => {
 
     let filtered = candidates;
 
+    // Recherche nom/prénom
     if (search && search.trim()) {
       const s = normalizeSearchTerm(search);
       filtered = filtered.filter(c => `${c.user?.nom || ''} ${c.user?.prenoms || ''}`.toLowerCase().includes(s));
     }
 
+    // Recherche poste flexible
     if (poste && poste.trim()) {
       const normalizedPoste = normalizeSearchTerm(poste);
       const mots = normalizedPoste.split(/\s+/).filter(Boolean);
@@ -415,6 +364,7 @@ export const getAllCandidatesSimple = async (req, res) => {
         const titre = (c.offre?.titre || '').toLowerCase();
         const description = (c.offre?.description || '').toLowerCase();
         
+        // Recherche flexible : si au moins un mot correspond
         return mots.some(mot => {
           const variations = createWordVariations(mot);
           return variations.some(variation => 
@@ -424,8 +374,10 @@ export const getAllCandidatesSimple = async (req, res) => {
       });
     }
 
+    // Statut
     if (statut) filtered = filtered.filter(c => c.statut === statut);
 
+    // Compétences flexibles
     if (competences && competences.trim()) {
       const compArray = competences.split(",").map(c => c.trim()).filter(Boolean);
       filtered = filtered.filter(c => {
@@ -445,7 +397,7 @@ export const getAllCandidatesSimple = async (req, res) => {
 };
 
 /**
- * Récupérer une candidature par ID
+ * 🔎 Récupérer une candidature par ID
  */
 export const getCandidateById = async (req, res) => {
   try {
@@ -460,7 +412,7 @@ export const getCandidateById = async (req, res) => {
 };
 
 /**
- * Récupérer la candidature du candidat connecté pour une offre donnée
+ * 🔎 Récupérer la candidature du candidat connecté pour une offre donnée
  */
 export const getMyCandidateByOffer = async (req, res) => {
   try {
@@ -477,7 +429,7 @@ export const getMyCandidateByOffer = async (req, res) => {
 };
 
 /**
- * Récupérer toutes les candidatures liées à une offre
+ * 🎯 Récupérer toutes les candidatures liées à une offre
  */
 export const getCandidatesByOffer = async (req, res) => {
   try {
@@ -493,7 +445,7 @@ export const getCandidatesByOffer = async (req, res) => {
 };
 
 /**
- * Supprimer un candidat
+ * ❌ Supprimer un candidat
  */
 export const deleteCandidate = async (req, res) => {
   try {
@@ -505,7 +457,7 @@ export const deleteCandidate = async (req, res) => {
 };
 
 /**
- * Supprimer plusieurs candidats
+ * ❌❌ Supprimer plusieurs candidats
  */
 export const deleteManyCandidates = async (req, res) => {
   try {
@@ -518,7 +470,7 @@ export const deleteManyCandidates = async (req, res) => {
 };
 
 /**
- * Récupérer toutes les candidatures d'un utilisateur spécifique
+ * 🔎 Récupérer toutes les candidatures d'un utilisateur spécifique
  */
 export const getCandidatesByUser = async (req, res) => {
   try {
@@ -527,7 +479,7 @@ export const getCandidatesByUser = async (req, res) => {
     const candidates = await Candidate.find({ user: userId })
       .populate("user", "nom prenoms email")
       .populate("offre", "titre description")
-      .sort({ dateSoumission: -1 });
+      .sort({ dateSoumission: -1 }); // Plus récent en premier
     
     res.status(200).json(candidates);
   } catch (error) {
