@@ -218,60 +218,50 @@ export default function InfoPostEntretien() {
   };
 
   // 🔹 Soumission
-  const handleSubmit = async () => {
-    try {
-      if (!user) {
-        alert("Utilisateur non identifié !");
-        return;
-      }
+ const handleSubmit = async (e) => {
+  e.preventDefault();
 
-      if (!validatePhoneNumbers()) {
-        return;
-      }
+  try {
+    const form = new FormData();
+    form.append("userId", user.id);
+    form.append("adresse", adresse);
+    form.append("telephone", telephone);
+    form.append("consentement", consentement);
+    form.append("contactsUrgence", JSON.stringify(contactsUrgence));
+    form.append("references", JSON.stringify(references));
 
-      setLoading(true);
+    if (photo) form.append("photo", photo);
+    if (signature) form.append("signature", signature);
 
-      let signatureDataURL = "";
-      if (sigPadRef.current && !sigPadRef.current.isEmpty()) {
-        signatureDataURL = sigPadRef.current.toDataURL();
-      }
-
-      const form = new FormData();
-      form.append("userId", user._id || user.id);
-      form.append("telephone", formData.telephone || "");
-      form.append("adresse", formData.adresse || "");
-      form.append("consentement", formData.consentement);
-      form.append("contactsUrgence", JSON.stringify(formData.contactsUrgence || []));
-      form.append("references", JSON.stringify(formData.references || []));
-
-      if (formData.photoFile) {
-        form.append("photo", formData.photoFile);
-      }
-
-      if (signatureDataURL) {
-        const response = await fetch(signatureDataURL);
-        const blob = await response.blob();
-        form.append("signature", blob, "signature.png");
-      }
-
-      const res = await fetch(`https://agrivision-holding.onrender.com/api/info-post-entretien/`, {
+    const res = await fetch(
+      `https://agrivision-holding.onrender.com/api/info-post-entretien/`,
+      {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}` }, // pas de "Content-Type" quand tu envoies FormData
         body: form,
-      });
-
-      if (!res.ok) {
-        const errorBody = await res.json().catch(() => ({}));
-        throw new Error(errorBody.message || "Erreur serveur");
       }
+    );
 
-      setShowSuccessPopup(true);
-    } catch (err) {
-      alert("Erreur lors de l'enregistrement: " + err.message);
-    } finally {
-      setLoading(false);
+    // Essayer de parser la réponse
+    const result = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      throw new Error(result.message || "Erreur serveur ❌");
     }
-  };
+
+    console.log(
+      "✅ Réponse backend :",
+      JSON.stringify(result, null, 2)
+    );
+
+    setShowSuccessPopup(true);
+
+  } catch (error) {
+    console.error("❌ Erreur handleSubmit :", error.message);
+    alert(error.message);
+  }
+};
+
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
