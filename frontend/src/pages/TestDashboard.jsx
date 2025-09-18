@@ -1,6 +1,6 @@
 // src/pages/TestsDashboard.jsx
 import { useState, useEffect } from "react";
-import { FiEdit, FiTrash2 } from "react-icons/fi";
+import { FiEdit, FiTrash2, FiX } from "react-icons/fi";
 
 export default function TestsDashboard() {
   const [tests, setTests] = useState([]);
@@ -488,8 +488,17 @@ function ModifyTestModal({ test, offres, onClose, onSave }) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex justify-center items-start pt-20 z-50">
-      <div className="bg-white rounded-xl p-6 w-full max-w-3xl shadow-lg overflow-auto max-h-[80vh]">
-        <h2 className="text-xl font-semibold mb-4">Modifier le test</h2>
+      <div className="bg-white rounded-xl p-6 w-full max-w-3xl shadow-lg overflow-auto max-h-[80vh] relative">
+        {/* Croix de fermeture */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 p-1 hover:bg-gray-100 rounded-full transition-colors"
+          type="button"
+        >
+          <FiX className="w-6 h-6 text-gray-500 hover:text-gray-700" />
+        </button>
+
+        <h2 className="text-xl font-semibold mb-4 pr-8">Modifier le test</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Champs classiques */}
           <div className="flex flex-col gap-1">
@@ -624,13 +633,13 @@ function ModifyTestModal({ test, offres, onClose, onSave }) {
           <div className="flex justify-end gap-2 mt-4">
             <button
               type="button"
-              onClick={() => setFormOpen(false)}
+              onClick={onClose}
               className="px-4 py-2 bg-gray-300 rounded"
             >
               Annuler
             </button>
             <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded">
-              Créer
+              Sauvegarder
             </button>
           </div>
         </form>

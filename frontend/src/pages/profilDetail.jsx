@@ -51,7 +51,7 @@ export default function CandidatureDetail() {
       setLoading(true);
       try {
         // 1️⃣ Récupérer la candidature
-        const resC = await fetch(`https://agrivision-holding.onrender.com//api/candidats/${id}`, {
+        const resC = await fetch(`https://agrivision-holding.onrender.com/api/candidats/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!resC.ok) throw new Error("Candidature introuvable");
@@ -64,7 +64,7 @@ export default function CandidatureDetail() {
           // 2️⃣ Infos post-entretien
           try {
             const resPost = await fetch(
-              `http://agrivision-holding.onrender.com/api/info-post-entretien/${userId}`,
+              `https://agrivision-holding.onrender.com/api/info-post-entretien/${userId}`,
               { headers: { Authorization: `Bearer ${token}` } }
             );
             if (resPost.ok) {
@@ -83,7 +83,7 @@ export default function CandidatureDetail() {
           // 3️⃣ Résultats de tests
           try {
             const resTest = await fetch(
-              `http://agrivision-holding.onrender.com/api/testResults/by-candidat/${userId}`,
+              `https://agrivision-holding.onrender.com/api/testResults/by-candidat/${userId}`,
               { headers: { Authorization: `Bearer ${token}` } }
             );
             if (resTest.ok) {

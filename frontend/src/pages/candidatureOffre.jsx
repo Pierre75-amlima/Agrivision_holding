@@ -17,7 +17,7 @@ export default function CandidaturesOffre() {
 
         // ✅ Utilisation des backticks pour l'interpolation
         // ✅ Ou proxy Vite si tu préfères
-        const res = await fetch(`/api/candidats/offre/${id}`, {
+        const res = await fetch(`https://agrivision-holding.onrender.com/api/candidats/offre/${id}`, {
           headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${token}`,
