@@ -36,7 +36,7 @@ export default function Dashboard() {
 
     const fetchCandidatures = async () => {
       try {
-        const res = await fetch("/api/candidats", {
+        const res = await fetch(`https://agrivision-holding.onrender.com/api/candidats`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.status === 401)
@@ -77,7 +77,7 @@ export default function Dashboard() {
 
     const fetchOffres = async () => {
       try {
-        const res = await fetch("/api/offres", {
+        const res = await fetch(`https://agrivision-holding.onrender.com/api/offres`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.status === 401)
