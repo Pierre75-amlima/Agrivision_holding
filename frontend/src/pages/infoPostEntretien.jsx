@@ -6,537 +6,295 @@ export default function InfoPostEntretien() {
   const { user, token, logout } = useContext(AuthContext);
 
   const [formData, setFormData] = useState({
-    nom: user?.nom || "",
-    prenoms: user?.prenoms || "",
-    email: user?.email || "",
-    telephone: "",
+    telephone: user?.telephone || "",
     adresse: "",
-    photoFile: null,
-    photoPreview: "",
-    signature: "",
-    consentement: false,
+    photo: null,
+    signature: null,
     contactsUrgence: [],
     references: [],
+    consentement: false,
   });
 
-  const [isPhoneFromDB, setIsPhoneFromDB] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
-  const [dataLoading, setDataLoading] = useState(true);
-  const sigPadRef = useRef();
 
-  // 🔹 Fonction pour valider et formater les numéros de téléphone (max 10 chiffres)
-  const handlePhoneInput = (value) => {
-    let numericValue = value.replace(/\D/g, "");
-    if (numericValue.length > 10) {
-      numericValue = numericValue.slice(0, 10);
-    }
-    return numericValue;
-  };
+  const sigCanvas = useRef(null);
 
-  // 🔹 Récupération automatique des données de candidature
-  useEffect(() => {
-    const fetchUserCandidatureData = async () => {
-      if (!user || !token) return;
-
-      try {
-        setDataLoading(true);
-        console.log("Récupération des données pour user:", user._id || user.id);
-
-        const res = await fetch(
-          `https://agrivision-holding.onrender.com/api/candidats/user/${user._id || user.id}`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          }
-        );
-
-        if (res.ok) {
-          const candidatures = await res.json();
-          console.log("Candidatures récupérées:", candidatures);
-
-          if (candidatures && candidatures.length > 0) {
-            // Trier par date de soumission pour prendre la plus récente
-            const candidaturesSorted = candidatures.sort(
-              (a, b) =>
-                new Date(b.dateSoumission || b.createdAt) -
-                new Date(a.dateSoumission || a.createdAt)
-            );
-
-            const derniereCandidature = candidaturesSorted[0];
-            console.log("Dernière candidature:", derniereCandidature);
-
-            if (derniereCandidature.telephone || derniereCandidature.adresse) {
-              setFormData((prev) => ({
-                ...prev,
-                telephone:
-                  derniereCandidature.telephone?.replace(/^\+229\s?/, "") || "",
-                adresse: derniereCandidature.adresse || "",
-              }));
-              setIsPhoneFromDB(true);
-              console.log("Données mises à jour:", {
-                telephone: derniereCandidature.telephone,
-                adresse: derniereCandidature.adresse,
-              });
-            }
-          } else {
-            console.log("Aucune candidature trouvée");
-          }
-        } else {
-          console.error("Erreur API:", res.status, res.statusText);
-        }
-      } catch (err) {
-        console.error("Erreur lors de la récupération des données:", err);
-      } finally {
-        setDataLoading(false);
-      }
-    };
-
-    fetchUserCandidatureData();
-  }, [user, token]);
-
-  // 🔹 Champs simples
+  // Gérer changement des champs classiques
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleTelephoneChange = (e) => {
-    setIsPhoneFromDB(false);
-    const formattedValue = handlePhoneInput(e.target.value);
-    setFormData((prev) => ({ ...prev, telephone: formattedValue }));
-  };
-
-  // 🔹 Contacts d'urgence
-  const addContactUrgence = () =>
-    setFormData((prev) => ({
-      ...prev,
-      contactsUrgence: [
-        ...prev.contactsUrgence,
-        { nom: "", prenom: "", relation: "", telephone: "" },
-      ],
-    }));
-
-  const removeContactUrgence = (index) =>
-    setFormData((prev) => ({
-      ...prev,
-      contactsUrgence: prev.contactsUrgence.filter((_, i) => i !== index),
-    }));
-
-  const handleContactUrgenceChange = (index, field, value) => {
-    const updated = [...formData.contactsUrgence];
-    if (field === "telephone") {
-      updated[index][field] = handlePhoneInput(value);
+    const { name, value, files } = e.target;
+    if (files) {
+      setFormData((prev) => ({ ...prev, [name]: files[0] }));
     } else {
-      updated[index][field] = value;
+      setFormData((prev) => ({ ...prev, [name]: value }));
     }
-    setFormData((prev) => ({ ...prev, contactsUrgence: updated }));
   };
 
-  // 🔹 Références
-  const addReference = () =>
-    setFormData((prev) => ({
-      ...prev,
-      references: [...prev.references, { nom: "", poste: "", contact: "" }],
-    }));
-
-  const removeReference = (index) =>
-    setFormData((prev) => ({
-      ...prev,
-      references: prev.references.filter((_, i) => i !== index),
-    }));
-
-  const handleReferenceChange = (index, field, value) => {
-    const updated = [...formData.references];
-    if (field === "contact") {
-      updated[index][field] = handlePhoneInput(value);
-    } else {
-      updated[index][field] = value;
-    }
-    setFormData((prev) => ({ ...prev, references: updated }));
-  };
-
-  // 🔹 Consentement
-  const handleConsent = () =>
-    setFormData((prev) => ({ ...prev, consentement: !prev.consentement }));
-
-  // 🔹 Photo
-  const handlePhotoChange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setFormData((prev) => ({
-      ...prev,
-      photoFile: file,
-      photoPreview: URL.createObjectURL(file),
-    }));
-  };
-
-  // 🔹 Signature
+  // Signature
   const clearSignature = () => {
-    sigPadRef.current.clear();
-    setFormData((prev) => ({ ...prev, signature: "" }));
+    sigCanvas.current.clear();
+    setFormData((prev) => ({ ...prev, signature: null }));
   };
 
   const saveSignature = () => {
-    if (sigPadRef.current.isEmpty()) return null;
-    const dataURL = sigPadRef.current.toDataURL();
-    setFormData((prev) => ({ ...prev, signature: dataURL }));
-    return dataURL;
+    if (!sigCanvas.current.isEmpty()) {
+      setFormData((prev) => ({
+        ...prev,
+        signature: sigCanvas.current.getTrimmedCanvas().toDataURL("image/png"),
+      }));
+    }
   };
 
-  // 🔹 Popup de succès
-  const handleSuccessClose = () => {
-    setShowSuccessPopup(false);
-    logout();
+  // Consentement
+  const handleConsent = (e) => {
+    setFormData((prev) => ({ ...prev, consentement: e.target.checked }));
   };
 
-  // 🔹 Validation des numéros
-  const validatePhoneNumbers = () => {
-    // ✅ PAS DE CONTRÔLE pour le numéro principal
-    // Vérification uniquement pour les contacts d’urgence et les références
+  // Gestion contacts d'urgence
+  const addContactUrgence = () => {
+    setFormData((prev) => ({
+      ...prev,
+      contactsUrgence: [...prev.contactsUrgence, { nom: "", telephone: "" }],
+    }));
+  };
+
+  const handleContactUrgenceChange = (i, field, value) => {
+    const newContacts = [...formData.contactsUrgence];
+    newContacts[i][field] = value;
+    setFormData((prev) => ({ ...prev, contactsUrgence: newContacts }));
+  };
+
+  const removeContactUrgence = (i) => {
+    const newContacts = formData.contactsUrgence.filter((_, idx) => idx !== i);
+    setFormData((prev) => ({ ...prev, contactsUrgence: newContacts }));
+  };
+
+  // Gestion références
+  const addReference = () => {
+    setFormData((prev) => ({
+      ...prev,
+      references: [...prev.references, { nom: "", contact: "" }],
+    }));
+  };
+
+  const handleReferenceChange = (i, field, value) => {
+    const newRefs = [...formData.references];
+    newRefs[i][field] = value;
+    setFormData((prev) => ({ ...prev, references: newRefs }));
+  };
+
+  const removeReference = (i) => {
+    const newRefs = formData.references.filter((_, idx) => idx !== i);
+    setFormData((prev) => ({ ...prev, references: newRefs }));
+  };
+
+  // Soumission
+  const handleSubmit = async () => {
+    // ✅ Validation uniquement pour contactsUrgence & références
     for (let i = 0; i < formData.contactsUrgence.length; i++) {
       const contact = formData.contactsUrgence[i];
       if (contact.telephone && contact.telephone.length !== 10) {
         alert(
-          `Le numéro de téléphone du contact d'urgence ${
-            i + 1
-          } doit contenir exactement 10 chiffres.`
+          `Le numéro de téléphone du contact d'urgence ${i + 1} doit contenir exactement 10 chiffres.`
         );
-        return false;
+        return;
       }
     }
 
     for (let i = 0; i < formData.references.length; i++) {
-      const reference = formData.references[i];
-      if (reference.contact && reference.contact.length !== 10) {
+      const ref = formData.references[i];
+      if (ref.contact && ref.contact.length !== 10) {
         alert(
-          `Le numéro de contact de la référence ${
-            i + 1
-          } doit contenir exactement 10 chiffres.`
+          `Le numéro de téléphone de la référence ${i + 1} doit contenir exactement 10 chiffres.`
         );
-        return false;
+        return;
       }
     }
 
-    return true;
-  };
+    setLoading(true);
 
-  // 🔹 Soumission
-  const handleSubmit = async () => {
     try {
-      if (!user) {
-        alert("Utilisateur non identifié !");
-        return;
-      }
-
-      if (!validatePhoneNumbers()) {
-        return;
-      }
-
-      setLoading(true);
-
-      let signatureDataURL = "";
-      if (sigPadRef.current && !sigPadRef.current.isEmpty()) {
-        signatureDataURL = sigPadRef.current.toDataURL();
-      }
-
-      const form = new FormData();
-      form.append("userId", user._id || user.id);
-      form.append("telephone", formData.telephone || "");
-      form.append("adresse", formData.adresse || "");
-      form.append("consentement", formData.consentement);
-      form.append(
-        "contactsUrgence",
-        JSON.stringify(formData.contactsUrgence || [])
-      );
-      form.append("references", JSON.stringify(formData.references || []));
-
-      if (formData.photoFile) {
-        form.append("photo", formData.photoFile);
-      }
-
-      if (signatureDataURL) {
-        const response = await fetch(signatureDataURL);
-        const blob = await response.blob();
-        form.append("signature", blob, "signature.png");
-      }
-
-      const res = await fetch(
-        `https://agrivision-holding.onrender.com/api/info-post-entretien/`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-          body: form,
+      const body = new FormData();
+      Object.keys(formData).forEach((key) => {
+        if (key === "contactsUrgence" || key === "references") {
+          body.append(key, JSON.stringify(formData[key]));
+        } else {
+          if (formData[key]) body.append(key, formData[key]);
         }
-      );
+      });
 
-      if (!res.ok) {
-        const errorBody = await res.json().catch(() => ({}));
-        throw new Error(errorBody.message || "Erreur serveur");
-      }
+      const res = await fetch("/api/candidates", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body,
+      });
 
+      if (!res.ok) throw new Error("Erreur serveur");
       setShowSuccessPopup(true);
     } catch (err) {
-      alert("Erreur lors de l'enregistrement: " + err.message);
+      console.error(err);
+      alert("Erreur lors de l'enregistrement.");
     } finally {
       setLoading(false);
     }
   };
 
+  const handleSuccessClose = () => {
+    setShowSuccessPopup(false);
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <h1 className="text-2xl font-bold text-[#094363] mb-2">
-            Informations Complémentaires
-          </h1>
-          <p className="text-gray-600">Dernière étape de votre candidature</p>
+    <div className="p-6">
+      <h1 className="text-2xl font-bold text-[#094363] mb-4">
+        Informations post-entretien
+      </h1>
+
+      <div className="space-y-6">
+        {/* Upload photo */}
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <label className="block text-gray-700 mb-2">Photo</label>
+          <input
+            type="file"
+            name="photo"
+            accept="image/*"
+            onChange={handleChange}
+          />
         </div>
 
-        {/* Infos personnelles */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <h2 className="text-lg font-semibold text-[#094363] mb-4">
-            Informations personnelles
-          </h2>
+        {/* Adresse */}
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <label className="block text-gray-700 mb-2">Adresse</label>
+          <input
+            type="text"
+            name="adresse"
+            value={formData.adresse}
+            onChange={handleChange}
+            className="w-full border rounded-md px-3 py-2"
+          />
+        </div>
 
-          {/* Indicateur de chargement des données */}
-          {dataLoading && (
-            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-              <p className="text-sm text-blue-600 flex items-center">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
-                Récupération de vos informations précédentes...
-              </p>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Nom
-              </label>
-              <input
-                value={formData.nom}
-                disabled
-                className="w-full p-3 border border-gray-300 rounded-md bg-gray-50"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Prénoms
-              </label>
-              <input
-                value={formData.prenoms}
-                disabled
-                className="w-full p-3 border border-gray-300 rounded-md bg-gray-50"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email
-              </label>
-              <input
-                value={formData.email}
-                disabled
-                className="w-full p-3 border border-gray-300 rounded-md bg-gray-50"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Téléphone
-              </label>
-              <div className="flex">
-                <span className="flex items-center px-3 bg-[#094363] text-white border border-[#094363] rounded-l-md">
-                  +229
-                </span>
-                <input
-                  value={formData.telephone}
-                  onChange={handleTelephoneChange}
-                  placeholder="Téléphone"
-                  maxLength={10}
-                  className="flex-1 p-3 border border-l-0 border-gray-300 rounded-r-md focus:outline-none focus:border-[#094363]"
-                  disabled={dataLoading}
-                />
-              </div>
-            </div>
-            <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Adresse
-              </label>
-              <input
-                value={formData.adresse}
-                name="adresse"
-                onChange={handleChange}
-                placeholder="Votre adresse complète"
-                className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:border-[#094363]"
-                disabled={dataLoading}
-              />
-              {!dataLoading && formData.adresse && (
-                <p className="text-xs text-green-600 mt-1">
-                  ✓ Vos infos ont été récupérées automatiquement
-                </p>
-              )}
-            </div>
+        {/* Signature */}
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <label className="block text-gray-700 mb-2">Signature</label>
+          <SignatureCanvas
+            ref={sigCanvas}
+            penColor="black"
+            canvasProps={{
+              width: 500,
+              height: 200,
+              className: "border rounded-md",
+            }}
+          />
+          <div className="flex gap-2 mt-2">
+            <button
+              onClick={clearSignature}
+              type="button"
+              className="px-4 py-2 bg-red-100 text-red-600 rounded-md"
+            >
+              Effacer
+            </button>
+            <button
+              onClick={saveSignature}
+              type="button"
+              className="px-4 py-2 bg-green-100 text-green-600 rounded-md"
+            >
+              Sauvegarder
+            </button>
           </div>
         </div>
 
         {/* Contacts d'urgence */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-            <h2 className="text-lg font-semibold text-[#094363]">
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-semibold text-gray-700">
               Contacts d'urgence
             </h2>
             <button
               onClick={addContactUrgence}
-              className="px-4 py-2 bg-[#16a34a] text-white rounded-md hover:bg-green-700 text-sm"
+              type="button"
+              className="px-3 py-1 bg-[#094363] text-white rounded-md"
             >
               + Ajouter
             </button>
           </div>
-
-          {formData.contactsUrgence.length === 0 ? (
-            <p className="text-gray-500 text-center py-4">
-              Aucun contact d'urgence ajouté
-            </p>
-          ) : (
-            <div className="space-y-4">
-              {formData.contactsUrgence.map((c, i) => (
-                <div key={i} className="border border-gray-200 rounded-md p-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    <input
-                      value={c.nom}
-                      onChange={(e) =>
-                        handleContactUrgenceChange(i, "nom", e.target.value)
-                      }
-                      placeholder="Nom"
-                      className="p-2 border border-gray-300 rounded-md focus:outline-none focus:border-[#094363]"
-                    />
-                    <input
-                      value={c.prenom}
-                      onChange={(e) =>
-                        handleContactUrgenceChange(i, "prenom", e.target.value)
-                      }
-                      placeholder="Prénom"
-                      className="p-2 border border-gray-300 rounded-md focus:outline-none focus:border-[#094363]"
-                    />
-                    <input
-                      value={c.relation}
-                      onChange={(e) =>
-                        handleContactUrgenceChange(i, "relation", e.target.value)
-                      }
-                      placeholder="Relation"
-                      className="p-2 border border-gray-300 rounded-md focus:outline-none focus:border-[#094363]"
-                    />
-                    <div className="flex gap-2">
-                      <div className="flex-1">
-                        <input
-                          value={c.telephone}
-                          onChange={(e) =>
-                            handleContactUrgenceChange(
-                              i,
-                              "telephone",
-                              e.target.value
-                            )
-                          }
-                          placeholder="Téléphone"
-                          maxLength={10}
-                          className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:border-[#094363]"
-                        />
-                        {c.telephone &&
-                          c.telephone.length > 0 &&
-                          c.telephone.length < 10 && (
-                            <p className="text-xs text-red-600 mt-1">
-                              10 chiffres requis
-                            </p>
-                          )}
-                      </div>
-                      <button
-                        onClick={() => removeContactUrgence(i)}
-                        className="p-2 bg-red-100 text-red-600 rounded-md hover:bg-red-200"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
+          {formData.contactsUrgence.map((c, i) => (
+            <div
+              key={i}
+              className="flex gap-2 items-center mb-2 bg-gray-50 p-2 rounded-md"
+            >
+              <input
+                type="text"
+                placeholder="Nom"
+                value={c.nom}
+                onChange={(e) =>
+                  handleContactUrgenceChange(i, "nom", e.target.value)
+                }
+                className="flex-1 border rounded-md px-3 py-2"
+              />
+              <input
+                type="tel"
+                placeholder="Téléphone (10 chiffres)"
+                value={c.telephone}
+                onChange={(e) =>
+                  handleContactUrgenceChange(i, "telephone", e.target.value)
+                }
+                className="flex-1 border rounded-md px-3 py-2"
+              />
+              <button
+                onClick={() => removeContactUrgence(i)}
+                type="button"
+                className="p-2 bg-red-100 text-red-600 rounded-md"
+              >
+                ×
+              </button>
             </div>
-          )}
+          ))}
         </div>
 
         {/* Références */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-            <h2 className="text-lg font-semibold text-[#094363]">
-              Références professionnelles
-            </h2>
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-semibold text-gray-700">Références</h2>
             <button
               onClick={addReference}
-              className="px-4 py-2 bg-[#16a34a] text-white rounded-md hover:bg-green-700 text-sm"
+              type="button"
+              className="px-3 py-1 bg-[#094363] text-white rounded-md"
             >
               + Ajouter
             </button>
           </div>
-
-          {formData.references.length === 0 ? (
-            <p className="text-gray-500 text-center py-4">
-              Aucune référence ajoutée
-            </p>
-          ) : (
-            <div className="space-y-4">
-              {formData.references.map((r, i) => (
-                <div key={i} className="border border-gray-200 rounded-md p-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <input
-                      value={r.nom}
-                      onChange={(e) =>
-                        handleReferenceChange(i, "nom", e.target.value)
-                      }
-                      placeholder="Nom complet"
-                      className="p-2 border border-gray-300 rounded-md focus:outline-none focus:border-[#094363]"
-                    />
-                    <input
-                      value={r.poste}
-                      onChange={(e) =>
-                        handleReferenceChange(i, "poste", e.target.value)
-                      }
-                      placeholder="Poste"
-                      className="p-2 border border-gray-300 rounded-md focus:outline-none focus:border-[#094363]"
-                    />
-                    <div className="flex gap-2">
-                      <div className="flex-1">
-                        <input
-                          value={r.contact}
-                          onChange={(e) =>
-                            handleReferenceChange(i, "contact", e.target.value)
-                          }
-                          placeholder="Téléphone"
-                          maxLength={10}
-                          className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:border-[#094363]"
-                        />
-                        {r.contact &&
-                          r.contact.length > 0 &&
-                          r.contact.length < 10 && (
-                            <p className="text-xs text-red-600 mt-1">
-                              10 chiffres requis
-                            </p>
-                          )}
-                      </div>
-                      <button
-                        onClick={() => removeReference(i)}
-                        className="p-2 bg-red-100 text-red-600 rounded-md hover:bg-red-200"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
+          {formData.references.map((r, i) => (
+            <div
+              key={i}
+              className="flex gap-2 items-center mb-2 bg-gray-50 p-2 rounded-md"
+            >
+              <input
+                type="text"
+                placeholder="Nom"
+                value={r.nom}
+                onChange={(e) =>
+                  handleReferenceChange(i, "nom", e.target.value)
+                }
+                className="flex-1 border rounded-md px-3 py-2"
+              />
+              <input
+                type="tel"
+                placeholder="Contact (10 chiffres)"
+                value={r.contact}
+                onChange={(e) =>
+                  handleReferenceChange(i, "contact", e.target.value)
+                }
+                className="flex-1 border rounded-md px-3 py-2"
+              />
+              <button
+                onClick={() => removeReference(i)}
+                type="button"
+                className="p-2 bg-red-100 text-red-600 rounded-md"
+              >
+                ×
+              </button>
             </div>
-          )}
+          ))}
         </div>
 
         {/* Consentement */}
