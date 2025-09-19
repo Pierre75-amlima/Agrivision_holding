@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { useAuth } from "../contexts/authContext";
 import { useNavigate } from "react-router-dom";
 import CandidatureCard from "../components/canditatCard";
-import { Trash2, CheckSquare, Square, AlertTriangle } from "lucide-react";
+import { Trash2, AlertTriangle } from "lucide-react";
 
 export default function Candidatures() {
   const { token } = useAuth();
@@ -11,14 +11,9 @@ export default function Candidatures() {
   const [allCandidats, setAllCandidats] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // États pour la sélection multiple
-  const [selectionMode, setSelectionMode] = useState(false);
-  const [selectedCandidats, setSelectedCandidats] = useState([]);
-
   // États pour les popups
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [candidatToDelete, setCandidatToDelete] = useState(null);
-  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   const [filters, setFilters] = useState({
@@ -35,15 +30,10 @@ export default function Candidatures() {
     competencesInput: "",
   });
 
-  // Statistiques rapides
+  // Statistiques rapides - seulement le total
   const stats = useMemo(() => {
     const total = allCandidats.length;
-    const acceptes = allCandidats.filter(c => c.statut === 'Accepté').length;
-    const attente = allCandidats.filter(c => c.statut === 'En attente').length;
-    const rejetes = allCandidats.filter(c => c.statut === 'Rejeté').length;
-    const avecTest = allCandidats.filter(c => c.testResult?.score !== undefined).length;
-    
-    return { total, acceptes, attente, rejetes, avecTest };
+    return { total };
   }, [allCandidats]);
 
   // Fonction de recherche côté serveur avec debounce
@@ -73,7 +63,7 @@ export default function Candidatures() {
         params.append('minExperienceMonths', searchFilters.minExperienceMonths);
       }
 
-      const url = `http://localhost:5000/api/candidats${params.toString() ? '?' + params.toString() : ''}`;
+      const url = `https://agrivision-holding.onrender.com/api/candidats${params.toString() ? '?' + params.toString() : ''}`;
       
       const res = await fetch(url, {
         headers: {
@@ -98,7 +88,7 @@ export default function Candidatures() {
   // Fonction pour charger tous les candidats (fallback)
   const fetchAllCandidats = useCallback(async () => {
     try {
-      const res = await fetch("http://localhost:5000/api/candidats", {
+      const res = await fetch(`https://agrivision-holding.onrender.com/api/candidats`, {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
@@ -118,7 +108,7 @@ export default function Candidatures() {
   const handleSingleDelete = async (candidatId) => {
     try {
       setDeleting(true);
-      const res = await fetch(`http://localhost:5000/api/candidats/${candidatId}`, {
+      const res = await fetch(`https://agrivision-holding.onrender.com/api/candidats/${candidatId}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -136,56 +126,6 @@ export default function Candidatures() {
       alert('Erreur lors de la suppression du candidat');
     } finally {
       setDeleting(false);
-    }
-  };
-
-  // Fonction de suppression multiple
-  const handleBulkDelete = async () => {
-    try {
-      setDeleting(true);
-      const res = await fetch('http://localhost:5000/api/candidats/bulk-delete', {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ ids: selectedCandidats }),
-      });
-
-      if (!res.ok) throw new Error('Erreur lors de la suppression multiple');
-
-      // Retirer les candidats de la liste
-      setAllCandidats(prev => prev.filter(c => !selectedCandidats.includes(c._id)));
-      setSelectedCandidats([]);
-      setSelectionMode(false);
-      setShowBulkDeleteConfirm(false);
-    } catch (err) {
-      console.error('Erreur suppression multiple:', err);
-      alert('Erreur lors de la suppression des candidats');
-    } finally {
-      setDeleting(false);
-    }
-  };
-
-  // Gestionnaires pour la sélection
-  const toggleSelectionMode = () => {
-    setSelectionMode(!selectionMode);
-    setSelectedCandidats([]);
-  };
-
-  const handleToggleSelect = (candidatId) => {
-    setSelectedCandidats(prev => 
-      prev.includes(candidatId)
-        ? prev.filter(id => id !== candidatId)
-        : [...prev, candidatId]
-    );
-  };
-
-  const handleSelectAll = () => {
-    if (selectedCandidats.length === allCandidats.length) {
-      setSelectedCandidats([]);
-    } else {
-      setSelectedCandidats(allCandidats.map(c => c._id));
     }
   };
 
@@ -335,46 +275,6 @@ export default function Candidatures() {
         </div>
       )}
 
-      {/* Popup de confirmation suppression multiple */}
-      {showBulkDeleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
-            <div className="flex items-center space-x-3 mb-4">
-              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
-                <AlertTriangle className="w-6 h-6 text-red-600" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">Suppression multiple</h3>
-                <p className="text-sm text-gray-600">Cette action ne peut pas être annulée</p>
-              </div>
-            </div>
-            
-            <p className="text-gray-700 mb-6">
-              Êtes-vous sûr de vouloir supprimer{' '}
-              <span className="font-semibold text-red-600">{selectedCandidats.length}</span>{' '}
-              candidature{selectedCandidats.length > 1 ? 's' : ''} sélectionnée{selectedCandidats.length > 1 ? 's' : ''} ?
-            </p>
-            
-            <div className="flex space-x-3">
-              <button
-                onClick={() => setShowBulkDeleteConfirm(false)}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                disabled={deleting}
-              >
-                Annuler
-              </button>
-              <button
-                onClick={handleBulkDelete}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
-                disabled={deleting}
-              >
-                {deleting ? 'Suppression...' : 'Supprimer tout'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Header */}
       <div className="bg-gradient-to-r from-[#094363] via-[#0a5a7a] to-[#094363] shadow-lg">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-6 lg:py-8">
@@ -396,18 +296,6 @@ export default function Candidatures() {
             </div>
             
             <div className="flex items-center space-x-2 sm:space-x-4">
-              {/* Bouton de sélection multiple */}
-              <button
-                onClick={toggleSelectionMode}
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                  selectionMode
-                    ? 'bg-red-500 text-white hover:bg-red-600'
-                    : 'bg-white/10 text-white hover:bg-white/20'
-                }`}
-              >
-                {selectionMode ? 'Annuler' : 'Sélectionner'}
-              </button>
-
               <button
                 onClick={() => setFiltersOpen(!filtersOpen)}
                 className="px-4 py-2 rounded bg-green-600 text-white hover:opacity-90 transition"
@@ -419,43 +307,6 @@ export default function Candidatures() {
               </button>
             </div>
           </div>
-
-          {/* Barre de sélection multiple */}
-          {selectionMode && (
-            <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 bg-white/10 backdrop-blur-sm rounded-xl border border-white/20">
-              <div className="flex items-center space-x-4">
-                <button
-                  onClick={handleSelectAll}
-                  className="flex items-center space-x-2 text-white hover:text-blue-200 transition-colors"
-                >
-                  {selectedCandidats.length === allCandidats.length ? (
-                    <CheckSquare className="w-5 h-5" />
-                  ) : (
-                    <Square className="w-5 h-5" />
-                  )}
-                  <span className="text-sm font-medium">
-                    {selectedCandidats.length === allCandidats.length ? 'Tout désélectionner' : 'Tout sélectionner'}
-                  </span>
-                </button>
-                
-                {selectedCandidats.length > 0 && (
-                  <span className="text-white/80 text-sm">
-                    {selectedCandidats.length} candidat{selectedCandidats.length > 1 ? 's' : ''} sélectionné{selectedCandidats.length > 1 ? 's' : ''}
-                  </span>
-                )}
-              </div>
-
-              {selectedCandidats.length > 0 && (
-                <button
-                  onClick={() => setShowBulkDeleteConfirm(true)}
-                  className="flex items-center space-x-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  <span>Supprimer ({selectedCandidats.length})</span>
-                </button>
-              )}
-            </div>
-          )}
 
           {/* Barre de recherche rapide */}
           <div className="mt-4 sm:mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -485,39 +336,11 @@ export default function Candidatures() {
             </div>
           </div>
 
-          {/* Statistiques rapides */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-3 lg:gap-4 mt-4 sm:mt-6">
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-2 sm:p-3 lg:p-4 text-center min-h-[60px] sm:min-h-[70px] flex flex-col justify-center">
-              <div className="text-lg sm:text-xl lg:text-2xl font-bold text-white">{stats.total}</div>
-              <div className="text-blue-100 text-xs sm:text-sm">Total</div>
-            </div>
-            <div 
-              className="bg-green-500/20 backdrop-blur-sm rounded-lg p-2 sm:p-3 lg:p-4 text-center cursor-pointer hover:bg-green-500/30 transition-colors min-h-[60px] sm:min-h-[70px] flex flex-col justify-center"
-              onClick={() => onQuickFilter('statut', filters.statut === 'Accepté' ? '' : 'Accepté')}
-            >
-              <div className="text-lg sm:text-xl lg:text-2xl font-bold text-green-100">{stats.acceptes}</div>
-              <div className="text-green-200 text-xs sm:text-sm">Acceptés</div>
-            </div>
-            <div 
-              className="bg-yellow-500/20 backdrop-blur-sm rounded-lg p-2 sm:p-3 lg:p-4 text-center cursor-pointer hover:bg-yellow-500/30 transition-colors min-h-[60px] sm:min-h-[70px] flex flex-col justify-center col-span-2 sm:col-span-1"
-              onClick={() => onQuickFilter('statut', filters.statut === 'En attente' ? '' : 'En attente')}
-            >
-              <div className="text-lg sm:text-xl lg:text-2xl font-bold text-yellow-100">{stats.attente}</div>
-              <div className="text-yellow-200 text-xs sm:text-sm">En attente</div>
-            </div>
-            <div 
-              className="bg-red-500/20 backdrop-blur-sm rounded-lg p-2 sm:p-3 lg:p-4 text-center cursor-pointer hover:bg-red-500/30 transition-colors min-h-[60px] sm:min-h-[70px] flex flex-col justify-center"
-              onClick={() => onQuickFilter('statut', filters.statut === 'Rejeté' ? '' : 'Rejeté')}
-            >
-              <div className="text-lg sm:text-xl lg:text-2xl font-bold text-red-100">{stats.rejetes}</div>
-              <div className="text-red-200 text-xs sm:text-sm">Rejetés</div>
-            </div>
-            <div 
-              className="bg-blue-500/20 backdrop-blur-sm rounded-lg p-2 sm:p-3 lg:p-4 text-center cursor-pointer hover:bg-blue-500/30 transition-colors min-h-[60px] sm:min-h-[70px] flex flex-col justify-center"
-              onClick={() => onQuickFilter('testValide', filters.testValide === 'oui' ? '' : 'oui')}
-            >
-              <div className="text-lg sm:text-xl lg:text-2xl font-bold text-blue-100">{stats.avecTest}</div>
-              <div className="text-blue-200 text-xs sm:text-sm">Avec test</div>
+          {/* Statistique unique - Total */}
+          <div className="flex justify-center mt-4 sm:mt-6">
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 sm:p-6 text-center min-w-[120px]">
+              <div className="text-2xl sm:text-3xl font-bold text-white">{stats.total}</div>
+              <div className="text-blue-100 text-sm sm:text-base">Candidatures</div>
             </div>
           </div>
         </div>
@@ -844,12 +667,12 @@ export default function Candidatures() {
                   <CandidatureCard 
                     candidat={candidat}
                     onDelete={handleDeleteClick}
-                    isSelectable={selectionMode}
-                    isSelected={selectedCandidats.includes(candidat._id)}
-                    onToggleSelect={handleToggleSelect}
+                    isSelectable={false}
+                    isSelected={false}
+                    onToggleSelect={null}
                   />
                   {/* Badge de pertinence pour les premiers résultats */}
-                  {hasActiveFilters && index < 3 && !selectionMode && (
+                  {hasActiveFilters && index < 3 && (
                     <div className="absolute -top-2 -right-2 bg-green-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center shadow-lg z-10">
                       {index + 1}
                     </div>
