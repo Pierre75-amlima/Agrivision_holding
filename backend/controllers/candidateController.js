@@ -214,9 +214,29 @@ const createWordVariations = (word) => {
 /**
  * 📌 Récupérer tous les candidats avec filtres dynamiques + populate (VERSION TRÈS FLEXIBLE)
  */
+/**
+ * 📌 Récupérer tous les candidats avec filtres dynamiques + populate + PAGINATION
+ */
 export const getAllCandidates = async (req, res) => {
   try {
-    const { search, poste, statut, competences, dateFrom, dateTo, testValide, minExperienceMonths } = req.query;
+    const { 
+      search, 
+      poste, 
+      statut, 
+      competences, 
+      dateFrom, 
+      dateTo, 
+      testValide, 
+      minExperienceMonths,
+      // NOUVEAUX PARAMÈTRES DE PAGINATION
+      page = 1,
+      limit = 20
+    } = req.query;
+    
+    // Validation des paramètres de pagination
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 20)); // Max 50 par page
+    const skipNum = (pageNum - 1) * limitNum;
     
     let pipeline = [
       { $lookup: { from: "users", localField: "user", foreignField: "_id", as: "user" } },
@@ -245,8 +265,6 @@ export const getAllCandidates = async (req, res) => {
       // Créer toutes les variations possibles pour chaque mot
       const allVariations = mots.flatMap(mot => createWordVariations(mot));
       
-      // Au lieu d'exiger TOUS les mots (AND), on cherche si AU MOINS UN mot correspond (OR)
-      // Ou on peut faire un système de score : plus il y a de mots qui correspondent, mieux c'est
       matchConditions.$or = [
         // Recherche exacte d'abord (priorité haute)
         { "offre.titre": { $regex: normalizedPoste, $options: "i" } },
@@ -307,6 +325,9 @@ export const getAllCandidates = async (req, res) => {
 
     if (Object.keys(matchConditions).length > 0) pipeline.push({ $match: matchConditions });
 
+    // Pipeline pour compter le total (AVANT pagination)
+    const countPipeline = [...pipeline, { $count: "total" }];
+    
     // Ajouter un score de pertinence si recherche par poste
     if (poste && poste.trim()) {
       pipeline.push({
@@ -328,8 +349,37 @@ export const getAllCandidates = async (req, res) => {
       pipeline.push({ $sort: { dateSoumission: -1 } });
     }
 
-    const candidates = await Candidate.aggregate(pipeline);
-    res.status(200).json(candidates);
+    // AJOUTER LA PAGINATION
+    pipeline.push(
+      { $skip: skipNum },
+      { $limit: limitNum }
+    );
+
+    // Exécuter les deux pipelines en parallèle
+    const [candidates, totalResult] = await Promise.all([
+      Candidate.aggregate(pipeline),
+      Candidate.aggregate(countPipeline)
+    ]);
+
+    const total = totalResult[0]?.total || 0;
+    const totalPages = Math.ceil(total / limitNum);
+    const hasNextPage = pageNum < totalPages;
+    const hasPrevPage = pageNum > 1;
+
+    // Réponse avec métadonnées de pagination
+    res.status(200).json({
+      candidates,
+      pagination: {
+        currentPage: pageNum,
+        totalPages,
+        totalItems: total,
+        itemsPerPage: limitNum,
+        hasNextPage,
+        hasPrevPage,
+        nextPage: hasNextPage ? pageNum + 1 : null,
+        prevPage: hasPrevPage ? pageNum - 1 : null
+      }
+    });
 
   } catch (error) {
     res.status(500).json({ message: "Erreur lors de la récupération", error: error.message });
