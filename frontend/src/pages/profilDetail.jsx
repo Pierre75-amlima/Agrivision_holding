@@ -179,7 +179,7 @@ export default function CandidatureDetail() {
       <div className="max-w-5xl mx-auto">
 
         {/* Bouton retour optimisé */}
-        <button
+        {/* <button
           onClick={handleBack}
           disabled={isNavigating}
           className={`mb-6 flex items-center space-x-2 px-4 py-2 bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow border border-gray-200 ${
@@ -190,7 +190,7 @@ export default function CandidatureDetail() {
           <span className="text-gray-700 font-medium">
             {isNavigating ? 'Retour...' : 'Retour'}
           </span>
-        </button>
+        </button> */}
 
         {/* Header - Infos de base */}
         <div className="bg-white rounded-xl shadow-sm p-8 mb-8 border border-gray-200">

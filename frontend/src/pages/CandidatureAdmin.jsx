@@ -37,7 +37,7 @@ export default function Candidatures() {
     return { total };
   }, [allCandidats]);
 
-  // Fonction de recherche côté serveur avec debounce
+  // Fonction de recherche côté serveur
   const fetchCandidatsWithFilters = useCallback(async (searchFilters) => {
     try {
       setLoading(true);
@@ -144,9 +144,6 @@ export default function Candidatures() {
     setShowDeleteConfirm(true);
   };
 
-  // Debounce pour la recherche en temps réel
-  const [searchTimeout, setSearchTimeout] = useState(null);
-
   const setDraftField = (field, value) => {
     setDraft(prev => ({ ...prev, [field]: value }));
   };
@@ -180,20 +177,15 @@ export default function Candidatures() {
     await fetchCandidatsWithFilters(newFilters);
   };
 
-  // Recherche en temps réel pour les champs principaux
-  const onQuickSearch = (field, value) => {
-    const newFilters = { ...filters, [field]: value };
+  // Fonction de recherche manuelle (uniquement via bouton ou entrée)
+  const handleManualSearch = () => {
+    const newFilters = {
+      ...filters,
+      searchName: draft.searchName || "",
+      poste: draft.poste || "",
+    };
     setFilters(newFilters);
-    setDraft({ ...draft, [field]: value });
-
-    // Debounce pour éviter trop de requêtes
-    if (searchTimeout) clearTimeout(searchTimeout);
-    
-    const timeout = setTimeout(() => {
-      fetchCandidatsWithFilters(newFilters);
-    }, 500);
-    
-    setSearchTimeout(timeout);
+    fetchCandidatsWithFilters(newFilters);
   };
 
   const onReset = async () => {
@@ -221,13 +213,6 @@ export default function Candidatures() {
   useEffect(() => {
     fetchCandidatsWithFilters(filters);
   }, [token]);
-
-  // Nettoyage du timeout
-  useEffect(() => {
-    return () => {
-      if (searchTimeout) clearTimeout(searchTimeout);
-    };
-  }, [searchTimeout]);
 
   if (loading) {
     return (
@@ -321,6 +306,9 @@ export default function Candidatures() {
                 </svg>
               </button>
               <div className="min-w-0">
+                <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white truncate">
+                  Candidatures
+                </h1>
                 <p className="text-blue-100 mt-0.5 sm:mt-1 text-xs sm:text-sm">
                   Gérez et consultez toutes les candidatures reçues
                 </p>
@@ -330,41 +318,71 @@ export default function Candidatures() {
             <div className="flex items-center space-x-2 sm:space-x-4">
               <button
                 onClick={() => setFiltersOpen(!filtersOpen)}
-                className="px-4 py-2 rounded bg-green-600 text-white hover:opacity-90 transition"
+                className="px-3 sm:px-4 py-2 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 text-white hover:bg-white/20 transition-all duration-200 text-sm sm:text-base flex items-center space-x-2"
               >
-                {filtersOpen ? 'Fermer filtres' : 'Voir les filtres'}
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.207A1 1 0 013 6.5V4z" />
+                </svg>
+                <span className="hidden sm:inline">
+                  {filtersOpen ? 'Fermer filtres' : 'Filtres'}
+                </span>
                 {hasActiveFilters && (
-                  <div className="inline-block w-1.5 h-1.5 sm:w-2 sm:h-2 bg-red-400 rounded-full ml-2"></div>
+                  <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-red-400 rounded-full"></div>
                 )}
               </button>
             </div>
           </div>
 
-          {/* Barre de recherche rapide */}
-          <div className="mt-4 sm:mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="relative">
-              <input
-                type="text"
-                placeholder=" Rechercher par nom/prénom..."
-                value={filters.searchName}
-                onChange={(e) => onQuickSearch('searchName', e.target.value)}
-                className="w-full px-4 py-2.5 pl-10 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-white/30 focus:bg-white/20 transition-all duration-200"
-              />
-              <svg className="absolute left-3 top-3 h-4 w-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
+          {/* Barre de recherche rapide - SANS recherche automatique */}
+          <div className="mt-4 sm:mt-6 space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Rechercher par nom/prénom..."
+                  value={draft.searchName}
+                  onChange={(e) => setDraftField("searchName", e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleManualSearch();
+                    }
+                  }}
+                  className="w-full px-4 py-2.5 pl-10 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-white/30 focus:bg-white/20 transition-all duration-200"
+                />
+                <svg className="absolute left-3 top-3 h-4 w-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Rechercher par poste..."
+                  value={draft.poste}
+                  onChange={(e) => setDraftField("poste", e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleManualSearch();
+                    }
+                  }}
+                  className="w-full px-4 py-2.5 pl-10 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-white/30 focus:bg-white/20 transition-all duration-200"
+                />
+                <svg className="absolute left-3 top-3 h-4 w-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m8 0H8m8 0v6l-2 2-2-2V6" />
+                </svg>
+              </div>
             </div>
-            <div className="relative">
-              <input
-                type="text"
-                placeholder=" Rechercher par poste (ex: Community management)..."
-                value={filters.poste}
-                onChange={(e) => onQuickSearch('poste', e.target.value)}
-                className="w-full px-4 py-2.5 pl-10 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-white/30 focus:bg-white/20 transition-all duration-200"
-              />
-              <svg className="absolute left-3 top-3 h-4 w-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m8 0H8m8 0v6l-2 2-2-2V6" />
-              </svg>
+            
+            {/* Bouton de recherche manuel */}
+            <div className="flex justify-center">
+              <button
+                onClick={handleManualSearch}
+                className="px-6 py-2.5 bg-white text-[#094363] rounded-xl font-medium hover:bg-gray-100 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center space-x-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <span>Rechercher</span>
+              </button>
             </div>
           </div>
 
@@ -564,7 +582,9 @@ export default function Candidatures() {
                   )}
                   {filters.competences.length > 0 && (
                     <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                      <span className="truncate max-w-20 sm:max-w-none">Compétences: {filters.competences.length}</span>
+                      <span className="truncate max-w-20 sm:max-w-none">
+                        Compétences: {filters.competences.join(', ')}
+                      </span>
                       <button 
                         onClick={() => {
                           setFilters(prev => ({ ...prev, competences: [] }));
@@ -594,7 +614,9 @@ export default function Candidatures() {
                   )}
                   {filters.minExperienceMonths && (
                     <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-                      <span className="truncate max-w-20 sm:max-w-none">Exp: {filters.minExperienceMonths}+ mois</span>
+                      <span className="truncate max-w-20 sm:max-w-none">
+                        Exp: {filters.minExperienceMonths}+ mois
+                      </span>
                       <button 
                         onClick={() => {
                           setFilters(prev => ({ ...prev, minExperienceMonths: '' }));
@@ -610,137 +632,101 @@ export default function Candidatures() {
                 </div>
               )}
             </div>
-            
-            {allCandidats.length === 0 && hasActiveFilters && (
+
+            {/* Filtres rapides */}
+            <div className="flex flex-wrap gap-2">
               <button
-                onClick={onReset}
-                className="flex items-center justify-center space-x-2 px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-[#094363] hover:bg-blue-50 rounded-lg transition-colors duration-200 self-start sm:self-auto"
+                onClick={() => onQuickFilter('statut', filters.statut === 'En attente' ? '' : 'En attente')}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                  filters.statut === 'En attente'
+                    ? 'bg-yellow-500 text-white'
+                    : 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
+                }`}
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                </svg>
-                <span>Effacer les filtres</span>
+                En attente
               </button>
-            )}
-          </div>
-          
-          {/* Indicateur de recherche flexible */}
-          {hasActiveFilters && (filters.poste || filters.competences.length > 0) && (
-            <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
-              <div className="flex items-center space-x-2">
-                <div className="flex items-center space-x-1">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                  <span>Recherche flexible activée</span>
-                </div>
-                <div className="text-gray-300">•</div>
-                <span>Résultats triés par pertinence</span>
-              </div>
-              <div className="text-green-600 font-medium">
-                Mode intelligent
-              </div>
+              <button
+                onClick={() => onQuickFilter('statut', filters.statut === 'Accepté' ? '' : 'Accepté')}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                  filters.statut === 'Accepté'
+                    ? 'bg-green-500 text-white'
+                    : 'bg-green-100 text-green-800 hover:bg-green-200'
+                }`}
+              >
+                Acceptés
+              </button>
+              <button
+                onClick={() => onQuickFilter('statut', filters.statut === 'Rejeté' ? '' : 'Rejeté')}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                  filters.statut === 'Rejeté'
+                    ? 'bg-red-500 text-white'
+                    : 'bg-red-100 text-red-800 hover:bg-red-200'
+                }`}
+              >
+                Rejetés
+              </button>
             </div>
-          )}
+          </div>
         </div>
 
-        {/* Résultats */}
+        {/* Liste des candidatures */}
         {allCandidats.length === 0 ? (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 sm:p-8 lg:p-12 text-center">
-            <div className="w-16 h-16 sm:w-20 sm:h-20 lg:w-24 lg:h-24 mx-auto mb-4 sm:mb-6 bg-gray-100 rounded-full flex items-center justify-center">
-              <svg className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 sm:p-12 text-center">
+            <div className="w-16 h-16 sm:w-24 sm:h-24 mx-auto mb-4 sm:mb-6 bg-gray-100 rounded-full flex items-center justify-center">
+              <svg className="w-8 h-8 sm:w-12 sm:h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
               </svg>
             </div>
             <h3 className="text-lg sm:text-xl font-semibold text-gray-800 mb-2">
-              {hasActiveFilters ? 'Aucun candidat trouvé' : 'Aucune candidature'}
+              Aucune candidature trouvée
             </h3>
-            <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6 px-4">
+            <p className="text-gray-600 mb-4 sm:mb-6">
               {hasActiveFilters 
-                ? 'Aucun résultat ne correspond à vos critères, même avec la recherche flexible.' 
-                : 'Il n\'y a pas encore de candidatures enregistrées.'
+                ? 'Aucune candidature ne correspond à vos critères de recherche.'
+                : 'Il n\'y a pas encore de candidatures dans votre base de données.'
               }
             </p>
             {hasActiveFilters && (
               <button
                 onClick={onReset}
-                className="inline-flex items-center space-x-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-[#094363] text-white rounded-xl hover:bg-blue-600 transition-all duration-200 shadow-lg hover:shadow-xl text-sm sm:text-base mb-3"
+                className="px-4 sm:px-6 py-2.5 sm:py-3 bg-[#094363] text-white rounded-xl font-medium hover:bg-blue-700 transition-colors"
               >
-                <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                </svg>
-                <span>Voir toutes les candidatures</span>
+                Effacer les filtres
               </button>
             )}
           </div>
         ) : (
-          <>
-            {/* Message d'aide pour la recherche flexible */}
-            {(filters.poste || filters.competences.length > 0) && (
-              <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4 text-sm">
-                <div className="flex items-start space-x-3">
-                  <div className="flex-shrink-0">
-                    <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="text-green-800 font-medium mb-1">Recherche flexible activée</p>
-                    <p className="text-green-700">
-                      Les résultats incluent des variations automatiques de vos termes de recherche. 
-                      Par exemple, "management" trouve aussi "manager", "manageur", etc.
-                    </p>
-                  </div>
-                </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+            {allCandidats.map((candidat) => (
+              <div key={candidat._id} className="relative">
+                <CandidatureCard
+                  candidat={candidat}
+                  onDelete={() => handleDeleteClick(candidat._id, candidat.nom + ' ' + candidat.prenom)}
+                  // Désactiver la clicabilité de la carte
+                  onClick={() => {}} // Fonction vide pour désactiver le clic
+                  isClickable={false} // Props pour indiquer que la carte n'est pas cliquable
+                />
               </div>
-            )}
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
-              {allCandidats.map((candidat, index) => (
-                <div key={candidat._id} className="relative">
-                  <CandidatureCard 
-                    candidat={candidat}
-                    onDelete={handleDeleteClick}
-                    isSelectable={false}
-                    isSelected={false}
-                    onToggleSelect={null}
-                  />
-                  {/* Badge de pertinence pour les premiers résultats */}
-                  {hasActiveFilters && index < 3 && (
-                    <div className="absolute -top-2 -right-2 bg-green-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center shadow-lg z-10">
-                      {index + 1}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </>
+            ))}
+          </div>
         )}
       </div>
 
-      {/* Animation CSS pour le popup de succès */}
-      <style>
-        {`
-          @keyframes progress-bar {
-            0% { width: 100%; }
-            100% { width: 0%; }
+      {/* CSS personnalisé pour l'animation de la barre de progression */}
+      <style jsx>{`
+        @keyframes progress-bar {
+          from {
+            width: 0%;
           }
-          .animate-progress-bar {
-            animation: progress-bar 3s linear forwards;
+          to {
+            width: 100%;
           }
-          @keyframes slide-in-from-top {
-            0% {
-              transform: translateY(-50px);
-              opacity: 0;
-            }
-            100% {
-              transform: translateY(0);
-              opacity: 1;
-            }
-          }
-          .animate-in.slide-in-from-top {
-            animation: slide-in-from-top 0.3s ease-out;
-          }
-        `}
-      </style>
+        }
+        
+        .animate-progress-bar {
+          animation: progress-bar 3s ease-out forwards;
+        }
+      `}</style>
     </div>
   );
 }

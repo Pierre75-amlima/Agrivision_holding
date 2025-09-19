@@ -272,12 +272,12 @@ export default function Dashboard() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
                       <div className="w-12 h-12 bg-gradient-to-br from-[#094363] to-[#026530] rounded-full flex items-center justify-center text-white font-semibold text-sm">
-                        {c.user?.prenom?.[0] || 'N'}{c.user?.nom?.[0] || 'A'}
+                        {c.user?.prenoms?.[0] || 'N'}{c.user?.nom?.[0] || 'A'}
                       </div>
                       
                       <div className="space-y-1">
                         <div className="font-semibold text-gray-900 group-hover:text-[#094363] transition-colors">
-                          {c.user?.prenom} {c.user?.nom}
+                          {c.user?.prenoms} {c.user?.nom}
                         </div>
                         <div className="text-sm text-gray-600 flex items-center gap-2">
                           <Briefcase className="w-4 h-4" />

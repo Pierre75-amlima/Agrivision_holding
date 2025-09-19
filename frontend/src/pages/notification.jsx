@@ -200,7 +200,7 @@ export default function Notifications() {
               </div>
             </div>
             
-            <div className="flex items-center space-x-2">
+            {/* <div className="flex items-center space-x-2">
               <button
                 onClick={markAllAsRead}
                 className="px-4 py-2 bg-[#094363] text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
@@ -208,7 +208,7 @@ export default function Notifications() {
                 <CheckCircle className="w-4 h-4" />
                 <span>Tout marquer comme lu</span>
               </button>
-            </div>
+            </div> */}
           </div>
 
           {/* Filtres */}
