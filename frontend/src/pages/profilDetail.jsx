@@ -15,25 +15,26 @@ export default function CandidatureDetail() {
   const [postEntretien, setPostEntretien] = useState(null);
   const [testResults, setTestResults] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isNavigating, setIsNavigating] = useState(false);
 
   // Fonction pour télécharger ou ouvrir un PDF/CV
   const downloadPdf = async (url, filename) => {
-  if (!url) return;
-  try {
-    const res = await fetch(url);
-    const blob = await res.blob(); // Convertir en Blob
-    const blobUrl = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = blobUrl;
-    link.download = filename || "document.pdf";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(blobUrl);
-  } catch (err) {
-    console.error("Erreur téléchargement PDF:", err);
-  }
-};
+    if (!url) return;
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = filename || "document.pdf";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error("Erreur téléchargement PDF:", err);
+    }
+  };
 
   const downloadImage = (imageUrl, filename) => {
     const link = document.createElement('a');
@@ -44,10 +45,21 @@ export default function CandidatureDetail() {
     document.body.removeChild(link);
   };
 
+  // Fonction de navigation optimisée
+  const handleBack = () => {
+    if (isNavigating) return;
+    setIsNavigating(true);
+    navigate(-1, { replace: true });
+  };
+
   useEffect(() => {
     if (!token) return;
 
+    let isMounted = true;
+
     const fetchData = async () => {
+      if (!isMounted) return;
+      
       setLoading(true);
       try {
         // 1️⃣ Récupérer la candidature
@@ -56,11 +68,13 @@ export default function CandidatureDetail() {
         });
         if (!resC.ok) throw new Error("Candidature introuvable");
         const dataC = await resC.json();
+        
+        if (!isMounted) return;
         setC(dataC);
 
         const userId = dataC?.user?._id;
 
-        if (userId) {
+        if (userId && isMounted) {
           // 2️⃣ Infos post-entretien
           try {
             const resPost = await fetch(
@@ -69,15 +83,15 @@ export default function CandidatureDetail() {
             );
             if (resPost.ok) {
               const dataPost = await resPost.json();
-              setPostEntretien(dataPost);
+              if (isMounted) setPostEntretien(dataPost);
             } else if (resPost.status === 404) {
-              setPostEntretien(null);
+              if (isMounted) setPostEntretien(null);
             } else {
               console.error("Erreur fetch post-entretien:", resPost.statusText);
             }
           } catch (err) {
             console.error("Erreur fetch post-entretien:", err);
-            setPostEntretien(null);
+            if (isMounted) setPostEntretien(null);
           }
 
           // 3️⃣ Résultats de tests
@@ -88,27 +102,31 @@ export default function CandidatureDetail() {
             );
             if (resTest.ok) {
               const dataTest = await resTest.json();
-              setTestResults(Array.isArray(dataTest) ? dataTest : [dataTest]);
+              if (isMounted) setTestResults(Array.isArray(dataTest) ? dataTest : [dataTest]);
             } else if (resTest.status === 404) {
-              setTestResults([]);
+              if (isMounted) setTestResults([]);
             } else {
               console.error("Erreur fetch testResults:", resTest.statusText);
-              setTestResults([]);
+              if (isMounted) setTestResults([]);
             }
           } catch (err) {
             console.error("Erreur fetch testResults:", err);
-            setTestResults([]);
+            if (isMounted) setTestResults([]);
           }
         }
       } catch (err) {
         console.error("Erreur fetch candidature:", err);
-        setC(null);
+        if (isMounted) setC(null);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
 
     fetchData();
+
+    return () => {
+      isMounted = false;
+    };
   }, [id, token]);
 
   if (loading) {
@@ -132,8 +150,9 @@ export default function CandidatureDetail() {
           <h2 className="text-xl font-semibold text-gray-800 mb-2">Candidature introuvable</h2>
           <p className="text-gray-600 mb-4">Cette candidature n'existe pas ou a été supprimée</p>
           <button
-            onClick={() => navigate(-1)}
+            onClick={handleBack}
             className="px-4 py-2 bg-[#094363] text-white rounded-lg hover:bg-blue-700 transition-colors"
+            disabled={isNavigating}
           >
             Retour
           </button>
@@ -159,13 +178,18 @@ export default function CandidatureDetail() {
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-5xl mx-auto">
 
-        {/* Bouton retour */}
+        {/* Bouton retour optimisé */}
         <button
-          onClick={() => navigate(-1)}
-          className="mb-6 flex items-center space-x-2 px-4 py-2 bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow border border-gray-200"
+          onClick={handleBack}
+          disabled={isNavigating}
+          className={`mb-6 flex items-center space-x-2 px-4 py-2 bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow border border-gray-200 ${
+            isNavigating ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50'
+          }`}
         >
           <ArrowLeft className="w-4 h-4 text-gray-600" />
-          <span className="text-gray-700 font-medium">Retour</span>
+          <span className="text-gray-700 font-medium">
+            {isNavigating ? 'Retour...' : 'Retour'}
+          </span>
         </button>
 
         {/* Header - Infos de base */}

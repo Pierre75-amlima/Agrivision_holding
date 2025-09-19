@@ -15,6 +15,7 @@ export default function Candidatures() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [candidatToDelete, setCandidatToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [showSuccessPopup, setShowSuccessPopup] = useState(false);
 
   const [filters, setFilters] = useState({
     searchName: "",
@@ -121,6 +122,14 @@ export default function Candidatures() {
       setAllCandidats(prev => prev.filter(c => c._id !== candidatId));
       setShowDeleteConfirm(false);
       setCandidatToDelete(null);
+      
+      // Afficher le popup de succès
+      setShowSuccessPopup(true);
+      
+      // Masquer le popup de succès après 3 secondes
+      setTimeout(() => {
+        setShowSuccessPopup(false);
+      }, 3000);
     } catch (err) {
       console.error('Erreur suppression:', err);
       alert('Erreur lors de la suppression du candidat');
@@ -233,6 +242,29 @@ export default function Candidatures() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      {/* Popup de succès */}
+      {showSuccessPopup && (
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 animate-in slide-in-from-top duration-300">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Suppression réussie</h3>
+                <p className="text-sm text-gray-600">Le candidat a été supprimé avec succès</p>
+              </div>
+            </div>
+            
+            <div className="w-full bg-green-200 h-1 rounded-full overflow-hidden">
+              <div className="bg-green-500 h-full animate-progress-bar"></div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Popup de confirmation suppression individuelle */}
       {showDeleteConfirm && candidatToDelete && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -683,6 +715,32 @@ export default function Candidatures() {
           </>
         )}
       </div>
+
+      {/* Animation CSS pour le popup de succès */}
+      <style>
+        {`
+          @keyframes progress-bar {
+            0% { width: 100%; }
+            100% { width: 0%; }
+          }
+          .animate-progress-bar {
+            animation: progress-bar 3s linear forwards;
+          }
+          @keyframes slide-in-from-top {
+            0% {
+              transform: translateY(-50px);
+              opacity: 0;
+            }
+            100% {
+              transform: translateY(0);
+              opacity: 1;
+            }
+          }
+          .animate-in.slide-in-from-top {
+            animation: slide-in-from-top 0.3s ease-out;
+          }
+        `}
+      </style>
     </div>
   );
 }
