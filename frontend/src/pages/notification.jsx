@@ -1,15 +1,10 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../contexts/authContext";
-import { useNavigate } from "react-router-dom";
 import {
   Bell,
   CheckCircle,
-  Archive,
   Trash2,
   Eye,
-  EyeOff,
-  Filter,
-  MoreHorizontal,
   User,
   FileText,
   Calendar,
@@ -19,15 +14,13 @@ import {
 
 export default function Notifications() {
   const { token } = useAuth();
-  const navigate = useNavigate();
 
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedFilter, setSelectedFilter] = useState("ALL");
-  const [showFilters, setShowFilters] = useState(false);
-  const [stats, setStats] = useState({});
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [showMessage, setShowMessage] = useState(false);
 
   // Types de notifications avec leurs métadonnées
   const notificationTypes = {
@@ -52,7 +45,6 @@ export default function Notifications() {
   // Charger les notifications
   useEffect(() => {
     fetchNotifications();
-    fetchStats();
   }, [currentPage, selectedFilter]);
 
   const fetchNotifications = async () => {
@@ -80,24 +72,6 @@ export default function Notifications() {
       console.error("Erreur chargement notifications:", error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchStats = async () => {
-    try {
-      const response = await fetch(`https://agrivision-holding.onrender.com/api/notifications/stats`, {
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json"
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setStats(data.stats);
-      }
-    } catch (error) {
-      console.error("Erreur chargement stats:", error);
     }
   };
 
@@ -145,25 +119,6 @@ export default function Notifications() {
     }
   };
 
-  // Archiver une notification
-  const archiveNotification = async (id) => {
-    try {
-      const response = await fetch(`https://agrivision-holding.onrender.com/api/notifications/${id}/archive`, {
-        method: "PUT",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json"
-        }
-      });
-
-      if (response.ok) {
-        setNotifications(prev => prev.filter(notif => notif._id !== id));
-      }
-    } catch (error) {
-      console.error("Erreur archivage:", error);
-    }
-  };
-
   // Supprimer une notification
   const deleteNotification = async (id) => {
     try {
@@ -189,9 +144,11 @@ export default function Notifications() {
       markAsRead(notification._id);
     }
 
-    if (notification.lienAction) {
-      navigate(notification.lienAction);
-    }
+    // Afficher le message d'information
+    setShowMessage(true);
+    setTimeout(() => {
+      setShowMessage(false);
+    }, 3000);
   };
 
   const formatDate = (dateString) => {
@@ -225,6 +182,14 @@ export default function Notifications() {
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-4xl mx-auto">
+        
+        {/* Message d'information */}
+        {showMessage && (
+          <div className="fixed top-4 right-4 z-50 bg-blue-500 text-white px-6 py-3 rounded-lg shadow-lg">
+            <p>Veuillez vous rendre sur la page concernée</p>
+          </div>
+        )}
+
         {/* Header */}
         <div className="bg-white rounded-xl shadow-sm p-6 mb-8 border border-gray-200">
           <div className="flex items-center justify-between mb-4">
@@ -232,7 +197,6 @@ export default function Notifications() {
               <Bell className="w-8 h-8 text-[#094363]" />
               <div>
                 <h1 className="text-2xl font-bold text-[#094363]">Notifications</h1>
-                <p className="text-gray-600">Gérez vos notifications et alertes</p>
               </div>
             </div>
             
@@ -249,7 +213,7 @@ export default function Notifications() {
 
           {/* Filtres */}
           <div className="flex flex-wrap gap-2">
-            {["ALL", "NON_LUE", "LUE", "ARCHIVEE"].map((filter) => (
+            {["ALL", "NON_LUE", "LUE"].map((filter) => (
               <button
                 key={filter}
                 onClick={() => setSelectedFilter(filter)}
@@ -260,8 +224,7 @@ export default function Notifications() {
                 }`}
               >
                 {filter === "ALL" ? "Toutes" : 
-                 filter === "NON_LUE" ? "Non lues" :
-                 filter === "LUE" ? "Lues" : "Archivées"}
+                 filter === "NON_LUE" ? "Non lues" : "Lues"}
               </button>
             ))}
           </div>
@@ -347,17 +310,6 @@ export default function Notifications() {
                             <Eye className="w-4 h-4" />
                           </button>
                         )}
-                        
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            archiveNotification(notification._id);
-                          }}
-                          className="p-1 text-gray-400 hover:text-orange-600 transition-colors"
-                          title="Archiver"
-                        >
-                          <Archive className="w-4 h-4" />
-                        </button>
                         
                         <button
                           onClick={(e) => {
