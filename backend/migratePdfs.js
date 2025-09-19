@@ -12,11 +12,10 @@ cloudinary.config({
 });
 
 const migratePdfsToRaw = async () => {
-  console.log('🚀 Début de la migration des PDFs...');
   
   try {
     // 1. Rechercher tous les PDFs dans le dossier cvs stockés comme 'image'
-    console.log('📋 Recherche des PDFs à migrer...');
+    
     
     // Méthode alternative : liste des ressources par dossier
     const searchResult = await cloudinary.api.resources({

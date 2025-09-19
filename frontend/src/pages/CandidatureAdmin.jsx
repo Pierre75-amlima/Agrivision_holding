@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { useAuth } from "../contexts/authContext";
 import { useNavigate } from "react-router-dom";
 import CandidatureCard from "../components/canditatCard";
+import { Trash2, CheckSquare, Square, AlertTriangle } from "lucide-react";
 
 export default function Candidatures() {
   const { token } = useAuth();
@@ -9,16 +10,16 @@ export default function Candidatures() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [allCandidats, setAllCandidats] = useState([]);
   const [loading, setLoading] = useState(true);
-  
-  // NOUVEAU : État de pagination
-  const [pagination, setPagination] = useState({
-    currentPage: 1,
-    totalPages: 0,
-    totalItems: 0,
-    itemsPerPage: 20,
-    hasNextPage: false,
-    hasPrevPage: false
-  });
+
+  // États pour la sélection multiple
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedCandidats, setSelectedCandidats] = useState([]);
+
+  // États pour les popups
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [candidatToDelete, setCandidatToDelete] = useState(null);
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const [filters, setFilters] = useState({
     searchName: "",
@@ -34,17 +35,19 @@ export default function Candidatures() {
     competencesInput: "",
   });
 
-  // Statistiques simplifiées
+  // Statistiques rapides
   const stats = useMemo(() => {
-    return { 
-      total: pagination.totalItems,
-      currentPage: pagination.currentPage,
-      totalPages: pagination.totalPages
-    };
-  }, [pagination]);
+    const total = allCandidats.length;
+    const acceptes = allCandidats.filter(c => c.statut === 'Accepté').length;
+    const attente = allCandidats.filter(c => c.statut === 'En attente').length;
+    const rejetes = allCandidats.filter(c => c.statut === 'Rejeté').length;
+    const avecTest = allCandidats.filter(c => c.testResult?.score !== undefined).length;
+    
+    return { total, acceptes, attente, rejetes, avecTest };
+  }, [allCandidats]);
 
-  // Fonction de recherche côté serveur avec debounce ET pagination
-  const fetchCandidatsWithFilters = useCallback(async (searchFilters, page = 1) => {
+  // Fonction de recherche côté serveur avec debounce
+  const fetchCandidatsWithFilters = useCallback(async (searchFilters) => {
     try {
       setLoading(true);
       
@@ -69,12 +72,8 @@ export default function Candidatures() {
       if (searchFilters.minExperienceMonths) {
         params.append('minExperienceMonths', searchFilters.minExperienceMonths);
       }
-      
-      // AJOUTER LES PARAMÈTRES DE PAGINATION
-      params.append('page', page.toString());
-      params.append('limit', '20'); // 20 candidats par page
 
-      const url = `https://agrivision-holding.onrender.com/api/candidats?${params.toString()}`;
+      const url = `http://localhost:5000/api/candidats${params.toString() ? '?' + params.toString() : ''}`;
       
       const res = await fetch(url, {
         headers: {
@@ -86,26 +85,10 @@ export default function Candidatures() {
       if (!res.ok) throw new Error("Erreur lors du chargement des candidats");
 
       const data = await res.json();
-      
-      // MISE À JOUR avec la nouvelle structure de réponse
-      if (data.candidates && data.pagination) {
-        setAllCandidats(data.candidates);
-        setPagination(data.pagination);
-      } else {
-        // Fallback pour l'ancienne structure
-        setAllCandidats(data);
-        setPagination({
-          currentPage: 1,
-          totalPages: 1,
-          totalItems: data.length,
-          itemsPerPage: data.length,
-          hasNextPage: false,
-          hasPrevPage: false
-        });
-      }
+      setAllCandidats(data);
     } catch (err) {
       console.error("Erreur fetch candidats:", err);
-      // En cas d'erreur, essayer de charger tous les candidats (ancien endpoint)
+      // En cas d'erreur, essayer de charger tous les candidats
       await fetchAllCandidats();
     } finally {
       setLoading(false);
@@ -115,7 +98,7 @@ export default function Candidatures() {
   // Fonction pour charger tous les candidats (fallback)
   const fetchAllCandidats = useCallback(async () => {
     try {
-      const res = await fetch(`https://agrivision-holding.onrender.com/api/candidats`, {
+      const res = await fetch("http://localhost:5000/api/candidats", {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
@@ -126,18 +109,91 @@ export default function Candidatures() {
 
       const data = await res.json();
       setAllCandidats(data);
-      setPagination({
-        currentPage: 1,
-        totalPages: 1,
-        totalItems: data.length,
-        itemsPerPage: data.length,
-        hasNextPage: false,
-        hasPrevPage: false
-      });
     } catch (err) {
       console.error("Erreur fetch candidats:", err);
     }
   }, [token]);
+
+  // Fonction de suppression d'un seul candidat
+  const handleSingleDelete = async (candidatId) => {
+    try {
+      setDeleting(true);
+      const res = await fetch(`http://localhost:5000/api/candidats/${candidatId}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) throw new Error('Erreur lors de la suppression');
+
+      // Retirer le candidat de la liste
+      setAllCandidats(prev => prev.filter(c => c._id !== candidatId));
+      setShowDeleteConfirm(false);
+      setCandidatToDelete(null);
+    } catch (err) {
+      console.error('Erreur suppression:', err);
+      alert('Erreur lors de la suppression du candidat');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // Fonction de suppression multiple
+  const handleBulkDelete = async () => {
+    try {
+      setDeleting(true);
+      const res = await fetch('http://localhost:5000/api/candidats/bulk-delete', {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ids: selectedCandidats }),
+      });
+
+      if (!res.ok) throw new Error('Erreur lors de la suppression multiple');
+
+      // Retirer les candidats de la liste
+      setAllCandidats(prev => prev.filter(c => !selectedCandidats.includes(c._id)));
+      setSelectedCandidats([]);
+      setSelectionMode(false);
+      setShowBulkDeleteConfirm(false);
+    } catch (err) {
+      console.error('Erreur suppression multiple:', err);
+      alert('Erreur lors de la suppression des candidats');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // Gestionnaires pour la sélection
+  const toggleSelectionMode = () => {
+    setSelectionMode(!selectionMode);
+    setSelectedCandidats([]);
+  };
+
+  const handleToggleSelect = (candidatId) => {
+    setSelectedCandidats(prev => 
+      prev.includes(candidatId)
+        ? prev.filter(id => id !== candidatId)
+        : [...prev, candidatId]
+    );
+  };
+
+  const handleSelectAll = () => {
+    if (selectedCandidats.length === allCandidats.length) {
+      setSelectedCandidats([]);
+    } else {
+      setSelectedCandidats(allCandidats.map(c => c._id));
+    }
+  };
+
+  // Gestionnaire pour la suppression individuelle
+  const handleDeleteClick = (candidatId, candidatName) => {
+    setCandidatToDelete({ id: candidatId, name: candidatName });
+    setShowDeleteConfirm(true);
+  };
 
   // Debounce pour la recherche en temps réel
   const [searchTimeout, setSearchTimeout] = useState(null);
@@ -151,15 +207,6 @@ export default function Candidatures() {
            filters.competences.length > 0 || filters.testValide || 
            filters.minExperienceMonths;
   }, [filters]);
-
-  // NOUVELLE FONCTION : Navigation entre les pages
-  const handlePageChange = (newPage) => {
-    if (newPage >= 1 && newPage <= pagination.totalPages) {
-      fetchCandidatsWithFilters(filters, newPage);
-      // Scroller vers le haut lors du changement de page
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  };
 
   // Fonction pour appliquer les filtres
   const onApply = async (e) => {
@@ -181,8 +228,7 @@ export default function Candidatures() {
 
     setFilters(newFilters);
     setFiltersOpen(false);
-    // IMPORTANT : Repartir à la page 1 lors d'une nouvelle recherche
-    await fetchCandidatsWithFilters(newFilters, 1);
+    await fetchCandidatsWithFilters(newFilters);
   };
 
   // Recherche en temps réel pour les champs principaux
@@ -195,8 +241,7 @@ export default function Candidatures() {
     if (searchTimeout) clearTimeout(searchTimeout);
     
     const timeout = setTimeout(() => {
-      // IMPORTANT : Repartir à la page 1 lors d'une nouvelle recherche
-      fetchCandidatsWithFilters(newFilters, 1);
+      fetchCandidatsWithFilters(newFilters);
     }, 500);
     
     setSearchTimeout(timeout);
@@ -213,12 +258,19 @@ export default function Candidatures() {
     };
     setDraft({ ...empty, competencesInput: "" });
     setFilters(empty);
-    await fetchCandidatsWithFilters(empty, 1);
+    await fetchAllCandidats();
+  };
+
+  const onQuickFilter = async (type, value) => {
+    const newFilters = { ...filters, [type]: value };
+    setFilters(newFilters);
+    setDraft({ ...draft, [type]: value });
+    await fetchCandidatsWithFilters(newFilters);
   };
 
   // Chargement initial
   useEffect(() => {
-    fetchCandidatsWithFilters(filters, 1);
+    fetchCandidatsWithFilters(filters);
   }, [token]);
 
   // Nettoyage du timeout
@@ -228,105 +280,7 @@ export default function Candidatures() {
     };
   }, [searchTimeout]);
 
-  // NOUVEAU : Composant de pagination
-  const PaginationComponent = () => {
-    if (pagination.totalPages <= 1) return null;
-
-    const renderPageNumbers = () => {
-      const pages = [];
-      const current = pagination.currentPage;
-      const total = pagination.totalPages;
-      
-      // Afficher max 5 numéros de page
-      let start = Math.max(1, current - 2);
-      let end = Math.min(total, start + 4);
-      
-      // Ajuster si on est proche de la fin
-      if (end - start < 4) {
-        start = Math.max(1, end - 4);
-      }
-      
-      for (let i = start; i <= end; i++) {
-        pages.push(
-          <button
-            key={i}
-            onClick={() => handlePageChange(i)}
-            disabled={loading}
-            className={`
-              px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200
-              ${current === i 
-                ? 'bg-[#094363] text-white shadow-lg' 
-                : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-              }
-              ${loading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-            `}
-          >
-            {i}
-          </button>
-        );
-      }
-      
-      return pages;
-    };
-
-    return (
-      <div className="flex items-center justify-between bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-        <div className="flex items-center space-x-4">
-          <span className="text-sm text-gray-600">
-            Page {pagination.currentPage} sur {pagination.totalPages}
-          </span>
-          <span className="text-xs text-gray-500">
-            ({pagination.totalItems} candidature{pagination.totalItems !== 1 ? 's' : ''} au total)
-          </span>
-        </div>
-        
-        <div className="flex items-center space-x-2">
-          {/* Bouton Précédent */}
-          <button
-            onClick={() => handlePageChange(pagination.currentPage - 1)}
-            disabled={!pagination.hasPrevPage || loading}
-            className={`
-              px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 flex items-center space-x-1
-              ${pagination.hasPrevPage && !loading
-                ? 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300 cursor-pointer'
-                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-              }
-            `}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            <span>Précédent</span>
-          </button>
-
-          {/* Numéros de page */}
-          <div className="hidden sm:flex items-center space-x-1">
-            {renderPageNumbers()}
-          </div>
-
-          {/* Bouton Suivant */}
-          <button
-            onClick={() => handlePageChange(pagination.currentPage + 1)}
-            disabled={!pagination.hasNextPage || loading}
-            className={`
-              px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 flex items-center space-x-1
-              ${pagination.hasNextPage && !loading
-                ? 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300 cursor-pointer'
-                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-              }
-            `}
-          >
-            <span>Suivant</span>
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-        </div>
-      </div>
-    );
-  };
-
-  if (loading && pagination.currentPage === 1) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
         <div className="text-center">
@@ -339,6 +293,88 @@ export default function Candidatures() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      {/* Popup de confirmation suppression individuelle */}
+      {showDeleteConfirm && candidatToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Confirmer la suppression</h3>
+                <p className="text-sm text-gray-600">Cette action ne peut pas être annulée</p>
+              </div>
+            </div>
+            
+            <p className="text-gray-700 mb-6">
+              Êtes-vous sûr de vouloir supprimer la candidature de{' '}
+              <span className="font-semibold text-[#094363]">{candidatToDelete.name}</span> ?
+            </p>
+            
+            <div className="flex space-x-3">
+              <button
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  setCandidatToDelete(null);
+                }}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                disabled={deleting}
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => handleSingleDelete(candidatToDelete.id)}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                disabled={deleting}
+              >
+                {deleting ? 'Suppression...' : 'Supprimer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Popup de confirmation suppression multiple */}
+      {showBulkDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Suppression multiple</h3>
+                <p className="text-sm text-gray-600">Cette action ne peut pas être annulée</p>
+              </div>
+            </div>
+            
+            <p className="text-gray-700 mb-6">
+              Êtes-vous sûr de vouloir supprimer{' '}
+              <span className="font-semibold text-red-600">{selectedCandidats.length}</span>{' '}
+              candidature{selectedCandidats.length > 1 ? 's' : ''} sélectionnée{selectedCandidats.length > 1 ? 's' : ''} ?
+            </p>
+            
+            <div className="flex space-x-3">
+              <button
+                onClick={() => setShowBulkDeleteConfirm(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                disabled={deleting}
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleBulkDelete}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                disabled={deleting}
+              >
+                {deleting ? 'Suppression...' : 'Supprimer tout'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="bg-gradient-to-r from-[#094363] via-[#0a5a7a] to-[#094363] shadow-lg">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-6 lg:py-8">
@@ -353,7 +389,6 @@ export default function Candidatures() {
                 </svg>
               </button>
               <div className="min-w-0">
-                <h1 className="text-lg sm:text-xl lg:text-2xl font-bold text-white truncate">Candidatures</h1>
                 <p className="text-blue-100 mt-0.5 sm:mt-1 text-xs sm:text-sm">
                   Gérez et consultez toutes les candidatures reçues
                 </p>
@@ -361,6 +396,18 @@ export default function Candidatures() {
             </div>
             
             <div className="flex items-center space-x-2 sm:space-x-4">
+              {/* Bouton de sélection multiple */}
+              <button
+                onClick={toggleSelectionMode}
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  selectionMode
+                    ? 'bg-red-500 text-white hover:bg-red-600'
+                    : 'bg-white/10 text-white hover:bg-white/20'
+                }`}
+              >
+                {selectionMode ? 'Annuler' : 'Sélectionner'}
+              </button>
+
               <button
                 onClick={() => setFiltersOpen(!filtersOpen)}
                 className="px-4 py-2 rounded bg-green-600 text-white hover:opacity-90 transition"
@@ -373,6 +420,43 @@ export default function Candidatures() {
             </div>
           </div>
 
+          {/* Barre de sélection multiple */}
+          {selectionMode && (
+            <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 bg-white/10 backdrop-blur-sm rounded-xl border border-white/20">
+              <div className="flex items-center space-x-4">
+                <button
+                  onClick={handleSelectAll}
+                  className="flex items-center space-x-2 text-white hover:text-blue-200 transition-colors"
+                >
+                  {selectedCandidats.length === allCandidats.length ? (
+                    <CheckSquare className="w-5 h-5" />
+                  ) : (
+                    <Square className="w-5 h-5" />
+                  )}
+                  <span className="text-sm font-medium">
+                    {selectedCandidats.length === allCandidats.length ? 'Tout désélectionner' : 'Tout sélectionner'}
+                  </span>
+                </button>
+                
+                {selectedCandidats.length > 0 && (
+                  <span className="text-white/80 text-sm">
+                    {selectedCandidats.length} candidat{selectedCandidats.length > 1 ? 's' : ''} sélectionné{selectedCandidats.length > 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
+
+              {selectedCandidats.length > 0 && (
+                <button
+                  onClick={() => setShowBulkDeleteConfirm(true)}
+                  className="flex items-center space-x-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Supprimer ({selectedCandidats.length})</span>
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Barre de recherche rapide */}
           <div className="mt-4 sm:mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="relative">
@@ -381,8 +465,7 @@ export default function Candidatures() {
                 placeholder=" Rechercher par nom/prénom..."
                 value={filters.searchName}
                 onChange={(e) => onQuickSearch('searchName', e.target.value)}
-                disabled={loading}
-                className="w-full px-4 py-2.5 pl-10 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-white/30 focus:bg-white/20 transition-all duration-200 disabled:opacity-50"
+                className="w-full px-4 py-2.5 pl-10 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-white/30 focus:bg-white/20 transition-all duration-200"
               />
               <svg className="absolute left-3 top-3 h-4 w-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -394,8 +477,7 @@ export default function Candidatures() {
                 placeholder=" Rechercher par poste (ex: Community management)..."
                 value={filters.poste}
                 onChange={(e) => onQuickSearch('poste', e.target.value)}
-                disabled={loading}
-                className="w-full px-4 py-2.5 pl-10 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-white/30 focus:bg-white/20 transition-all duration-200 disabled:opacity-50"
+                className="w-full px-4 py-2.5 pl-10 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-white/30 focus:bg-white/20 transition-all duration-200"
               />
               <svg className="absolute left-3 top-3 h-4 w-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m8 0H8m8 0v6l-2 2-2-2V6" />
@@ -403,18 +485,39 @@ export default function Candidatures() {
             </div>
           </div>
 
-          {/* Statistiques avec pagination */}
-          <div className="mt-4 sm:mt-6">
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-2 sm:p-3 lg:p-4 text-center max-w-md">
+          {/* Statistiques rapides */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-3 lg:gap-4 mt-4 sm:mt-6">
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-2 sm:p-3 lg:p-4 text-center min-h-[60px] sm:min-h-[70px] flex flex-col justify-center">
               <div className="text-lg sm:text-xl lg:text-2xl font-bold text-white">{stats.total}</div>
-              <div className="text-blue-100 text-xs sm:text-sm">
-                Total candidatures
-                {stats.totalPages > 1 && (
-                  <span className="block mt-1">
-                    Page {stats.currentPage} / {stats.totalPages}
-                  </span>
-                )}
-              </div>
+              <div className="text-blue-100 text-xs sm:text-sm">Total</div>
+            </div>
+            <div 
+              className="bg-green-500/20 backdrop-blur-sm rounded-lg p-2 sm:p-3 lg:p-4 text-center cursor-pointer hover:bg-green-500/30 transition-colors min-h-[60px] sm:min-h-[70px] flex flex-col justify-center"
+              onClick={() => onQuickFilter('statut', filters.statut === 'Accepté' ? '' : 'Accepté')}
+            >
+              <div className="text-lg sm:text-xl lg:text-2xl font-bold text-green-100">{stats.acceptes}</div>
+              <div className="text-green-200 text-xs sm:text-sm">Acceptés</div>
+            </div>
+            <div 
+              className="bg-yellow-500/20 backdrop-blur-sm rounded-lg p-2 sm:p-3 lg:p-4 text-center cursor-pointer hover:bg-yellow-500/30 transition-colors min-h-[60px] sm:min-h-[70px] flex flex-col justify-center col-span-2 sm:col-span-1"
+              onClick={() => onQuickFilter('statut', filters.statut === 'En attente' ? '' : 'En attente')}
+            >
+              <div className="text-lg sm:text-xl lg:text-2xl font-bold text-yellow-100">{stats.attente}</div>
+              <div className="text-yellow-200 text-xs sm:text-sm">En attente</div>
+            </div>
+            <div 
+              className="bg-red-500/20 backdrop-blur-sm rounded-lg p-2 sm:p-3 lg:p-4 text-center cursor-pointer hover:bg-red-500/30 transition-colors min-h-[60px] sm:min-h-[70px] flex flex-col justify-center"
+              onClick={() => onQuickFilter('statut', filters.statut === 'Rejeté' ? '' : 'Rejeté')}
+            >
+              <div className="text-lg sm:text-xl lg:text-2xl font-bold text-red-100">{stats.rejetes}</div>
+              <div className="text-red-200 text-xs sm:text-sm">Rejetés</div>
+            </div>
+            <div 
+              className="bg-blue-500/20 backdrop-blur-sm rounded-lg p-2 sm:p-3 lg:p-4 text-center cursor-pointer hover:bg-blue-500/30 transition-colors min-h-[60px] sm:min-h-[70px] flex flex-col justify-center"
+              onClick={() => onQuickFilter('testValide', filters.testValide === 'oui' ? '' : 'oui')}
+            >
+              <div className="text-lg sm:text-xl lg:text-2xl font-bold text-blue-100">{stats.avecTest}</div>
+              <div className="text-blue-200 text-xs sm:text-sm">Avec test</div>
             </div>
           </div>
         </div>
@@ -429,8 +532,7 @@ export default function Candidatures() {
               {hasActiveFilters && (
                 <button
                   onClick={onReset}
-                  disabled={loading}
-                  className="text-xs sm:text-sm text-red-600 hover:text-red-800 font-medium disabled:opacity-50"
+                  className="text-xs sm:text-sm text-red-600 hover:text-red-800 font-medium"
                 >
                   Effacer tout
                 </button>
@@ -449,8 +551,7 @@ export default function Candidatures() {
                     placeholder="Rechercher..."
                     value={draft.searchName}
                     onChange={(e) => setDraftField("searchName", e.target.value)}
-                    disabled={loading}
-                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-[#094363] focus:ring-4 focus:ring-[#094363]/10 transition-all duration-200 text-sm sm:text-base disabled:opacity-50"
+                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-[#094363] focus:ring-4 focus:ring-[#094363]/10 transition-all duration-200 text-sm sm:text-base"
                   />
                 </div>
 
@@ -464,8 +565,7 @@ export default function Candidatures() {
                     placeholder="Ex: Community management, Commercial..."
                     value={draft.poste}
                     onChange={(e) => setDraftField("poste", e.target.value)}
-                    disabled={loading}
-                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-[#094363] focus:ring-4 focus:ring-[#094363]/10 transition-all duration-200 text-sm sm:text-base disabled:opacity-50"
+                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-[#094363] focus:ring-4 focus:ring-[#094363]/10 transition-all duration-200 text-sm sm:text-base"
                   />
                   <p className="text-xs text-gray-500 mt-1">
                     Trouve automatiquement les variations (management → manager)
@@ -479,8 +579,7 @@ export default function Candidatures() {
                   <select
                     value={draft.statut}
                     onChange={(e) => setDraftField("statut", e.target.value)}
-                    disabled={loading}
-                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-[#094363] focus:ring-4 focus:ring-[#094363]/10 transition-all duration-200 text-sm sm:text-base disabled:opacity-50"
+                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-[#094363] focus:ring-4 focus:ring-[#094363]/10 transition-all duration-200 text-sm sm:text-base"
                   >
                     <option value="">Tous les statuts</option>
                     <option value="Accepté">Accepté</option>
@@ -499,8 +598,7 @@ export default function Candidatures() {
                     placeholder="Ex: Communication, vente..."
                     value={draft.competencesInput}
                     onChange={(e) => setDraftField("competencesInput", e.target.value)}
-                    disabled={loading}
-                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-[#094363] focus:ring-4 focus:ring-[#094363]/10 transition-all duration-200 text-sm sm:text-base disabled:opacity-50"
+                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-[#094363] focus:ring-4 focus:ring-[#094363]/10 transition-all duration-200 text-sm sm:text-base"
                   />
                   <p className="text-xs text-gray-500 mt-1">Séparez par des virgules</p>
                 </div>
@@ -512,8 +610,7 @@ export default function Candidatures() {
                   <select
                     value={draft.testValide}
                     onChange={(e) => setDraftField("testValide", e.target.value)}
-                    disabled={loading}
-                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-[#094363] focus:ring-4 focus:ring-[#094363]/10 transition-all duration-200 text-sm sm:text-base disabled:opacity-50"
+                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-[#094363] focus:ring-4 focus:ring-[#094363]/10 transition-all duration-200 text-sm sm:text-base"
                   >
                     <option value="">Peu importe</option>
                     <option value="oui">Oui</option>
@@ -531,8 +628,7 @@ export default function Candidatures() {
                     min="0"
                     value={draft.minExperienceMonths}
                     onChange={(e) => setDraftField("minExperienceMonths", e.target.value)}
-                    disabled={loading}
-                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-[#094363] focus:ring-4 focus:ring-[#094363]/10 transition-all duration-200 text-sm sm:text-base disabled:opacity-50"
+                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-[#094363] focus:ring-4 focus:ring-[#094363]/10 transition-all duration-200 text-sm sm:text-base"
                   />
                 </div>
               </div>
@@ -542,17 +638,15 @@ export default function Candidatures() {
                 <button
                   type="button"
                   onClick={onReset}
-                  disabled={loading}
-                  className="w-full sm:w-auto px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl border-2 border-gray-300 text-gray-700 font-medium hover:bg-gray-50 transition-all duration-200 text-sm sm:text-base disabled:opacity-50"
+                  className="w-full sm:w-auto px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl border-2 border-gray-300 text-gray-700 font-medium hover:bg-gray-50 transition-all duration-200 text-sm sm:text-base"
                 >
                   Réinitialiser
                 </button>
                 <button
                   type="submit"
-                  disabled={loading}
-                  className="w-full sm:w-auto px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl bg-gradient-to-r from-[#094363] to-blue-600 text-white font-medium hover:from-blue-600 hover:to-[#094363] transition-all duration-200 shadow-lg hover:shadow-xl text-sm sm:text-base disabled:opacity-50"
+                  className="w-full sm:w-auto px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl bg-gradient-to-r from-[#094363] to-blue-600 text-white font-medium hover:from-blue-600 hover:to-[#094363] transition-all duration-200 shadow-lg hover:shadow-xl text-sm sm:text-base"
                 >
-                  {loading ? 'Recherche...' : 'Appliquer les filtres'}
+                  Appliquer les filtres
                 </button>
               </div>
             </form>
@@ -565,11 +659,6 @@ export default function Candidatures() {
             <div className="flex flex-col space-y-2 sm:space-y-0 sm:flex-row sm:items-center sm:space-x-4">
               <div className="text-base sm:text-lg font-semibold text-gray-800">
                 {allCandidats.length} candidature{allCandidats.length !== 1 ? 's' : ''}
-                {pagination.totalPages > 1 && (
-                  <span className="text-sm font-normal text-gray-600 ml-2">
-                    (page {pagination.currentPage} sur {pagination.totalPages})
-                  </span>
-                )}
               </div>
               {hasActiveFilters && (
                 <div className="flex flex-wrap gap-1.5 sm:gap-2">
@@ -580,10 +669,9 @@ export default function Candidatures() {
                         onClick={() => {
                           setFilters(prev => ({ ...prev, searchName: '' }));
                           setDraft(prev => ({ ...prev, searchName: '' }));
-                          fetchCandidatsWithFilters({ ...filters, searchName: '' }, 1);
+                          fetchCandidatsWithFilters({ ...filters, searchName: '' });
                         }}
-                        disabled={loading}
-                        className="ml-1 sm:ml-2 text-blue-600 hover:text-blue-800 flex-shrink-0 disabled:opacity-50"
+                        className="ml-1 sm:ml-2 text-blue-600 hover:text-blue-800 flex-shrink-0"
                       >
                         ×
                       </button>
@@ -596,10 +684,9 @@ export default function Candidatures() {
                         onClick={() => {
                           setFilters(prev => ({ ...prev, poste: '' }));
                           setDraft(prev => ({ ...prev, poste: '' }));
-                          fetchCandidatsWithFilters({ ...filters, poste: '' }, 1);
+                          fetchCandidatsWithFilters({ ...filters, poste: '' });
                         }}
-                        disabled={loading}
-                        className="ml-1 sm:ml-2 text-green-600 hover:text-green-800 flex-shrink-0 disabled:opacity-50"
+                        className="ml-1 sm:ml-2 text-green-600 hover:text-green-800 flex-shrink-0"
                       >
                         ×
                       </button>
@@ -612,10 +699,9 @@ export default function Candidatures() {
                         onClick={() => {
                           setFilters(prev => ({ ...prev, statut: '' }));
                           setDraft(prev => ({ ...prev, statut: '' }));
-                          fetchCandidatsWithFilters({ ...filters, statut: '' }, 1);
+                          fetchCandidatsWithFilters({ ...filters, statut: '' });
                         }}
-                        disabled={loading}
-                        className="ml-1 sm:ml-2 text-purple-600 hover:text-purple-800 flex-shrink-0 disabled:opacity-50"
+                        className="ml-1 sm:ml-2 text-purple-600 hover:text-purple-800 flex-shrink-0"
                       >
                         ×
                       </button>
@@ -628,10 +714,9 @@ export default function Candidatures() {
                         onClick={() => {
                           setFilters(prev => ({ ...prev, competences: [] }));
                           setDraft(prev => ({ ...prev, competences: [], competencesInput: '' }));
-                          fetchCandidatsWithFilters({ ...filters, competences: [] }, 1);
+                          fetchCandidatsWithFilters({ ...filters, competences: [] });
                         }}
-                        disabled={loading}
-                        className="ml-1 sm:ml-2 text-yellow-600 hover:text-yellow-800 flex-shrink-0 disabled:opacity-50"
+                        className="ml-1 sm:ml-2 text-yellow-600 hover:text-yellow-800 flex-shrink-0"
                       >
                         ×
                       </button>
@@ -644,10 +729,9 @@ export default function Candidatures() {
                         onClick={() => {
                           setFilters(prev => ({ ...prev, testValide: '' }));
                           setDraft(prev => ({ ...prev, testValide: '' }));
-                          fetchCandidatsWithFilters({ ...filters, testValide: '' }, 1);
+                          fetchCandidatsWithFilters({ ...filters, testValide: '' });
                         }}
-                        disabled={loading}
-                        className="ml-1 sm:ml-2 text-indigo-600 hover:text-indigo-800 flex-shrink-0 disabled:opacity-50"
+                        className="ml-1 sm:ml-2 text-indigo-600 hover:text-indigo-800 flex-shrink-0"
                       >
                         ×
                       </button>
@@ -660,10 +744,9 @@ export default function Candidatures() {
                         onClick={() => {
                           setFilters(prev => ({ ...prev, minExperienceMonths: '' }));
                           setDraft(prev => ({ ...prev, minExperienceMonths: '' }));
-                          fetchCandidatsWithFilters({ ...filters, minExperienceMonths: '' }, 1);
+                          fetchCandidatsWithFilters({ ...filters, minExperienceMonths: '' });
                         }}
-                        disabled={loading}
-                        className="ml-1 sm:ml-2 text-orange-600 hover:text-orange-800 flex-shrink-0 disabled:opacity-50"
+                        className="ml-1 sm:ml-2 text-orange-600 hover:text-orange-800 flex-shrink-0"
                       >
                         ×
                       </button>
@@ -676,8 +759,7 @@ export default function Candidatures() {
             {allCandidats.length === 0 && hasActiveFilters && (
               <button
                 onClick={onReset}
-                disabled={loading}
-                className="flex items-center justify-center space-x-2 px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-[#094363] hover:bg-blue-50 rounded-lg transition-colors duration-200 self-start sm:self-auto disabled:opacity-50"
+                className="flex items-center justify-center space-x-2 px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-[#094363] hover:bg-blue-50 rounded-lg transition-colors duration-200 self-start sm:self-auto"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
@@ -705,18 +787,8 @@ export default function Candidatures() {
           )}
         </div>
 
-        {/* Loading pour changement de page */}
-        {loading && pagination.currentPage > 1 && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6 text-center">
-            <div className="flex items-center justify-center space-x-2 text-gray-600">
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[#094363]"></div>
-              <span>Chargement de la page {pagination.currentPage}...</span>
-            </div>
-          </div>
-        )}
-
         {/* Résultats */}
-        {allCandidats.length === 0 && !loading ? (
+        {allCandidats.length === 0 ? (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 sm:p-8 lg:p-12 text-center">
             <div className="w-16 h-16 sm:w-20 sm:h-20 lg:w-24 lg:h-24 mx-auto mb-4 sm:mb-6 bg-gray-100 rounded-full flex items-center justify-center">
               <svg className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -735,8 +807,7 @@ export default function Candidatures() {
             {hasActiveFilters && (
               <button
                 onClick={onReset}
-                disabled={loading}
-                className="inline-flex items-center space-x-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-[#094363] text-white rounded-xl hover:bg-blue-600 transition-all duration-200 shadow-lg hover:shadow-xl text-sm sm:text-base mb-3 disabled:opacity-50"
+                className="inline-flex items-center space-x-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-[#094363] text-white rounded-xl hover:bg-blue-600 transition-all duration-200 shadow-lg hover:shadow-xl text-sm sm:text-base mb-3"
               >
                 <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
@@ -748,7 +819,7 @@ export default function Candidatures() {
         ) : (
           <>
             {/* Message d'aide pour la recherche flexible */}
-            {(filters.poste || filters.competences.length > 0) && !loading && (
+            {(filters.poste || filters.competences.length > 0) && (
               <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4 text-sm">
                 <div className="flex items-start space-x-3">
                   <div className="flex-shrink-0">
@@ -767,27 +838,25 @@ export default function Candidatures() {
               </div>
             )}
             
-            {/* Grille des candidats */}
-            {!loading && allCandidats.length > 0 && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6 mb-6">
-                {allCandidats.map((candidat, index) => (
-                  <div key={candidat._id} className="relative">
-                    <CandidatureCard 
-                      candidat={candidat}
-                    />
-                    {/* Badge de pertinence pour les premiers résultats */}
-                    {hasActiveFilters && index < 3 && (
-                      <div className="absolute -top-2 -right-2 bg-green-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center shadow-lg z-10">
-                        {index + 1}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Composant de pagination */}
-            <PaginationComponent />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
+              {allCandidats.map((candidat, index) => (
+                <div key={candidat._id} className="relative">
+                  <CandidatureCard 
+                    candidat={candidat}
+                    onDelete={handleDeleteClick}
+                    isSelectable={selectionMode}
+                    isSelected={selectedCandidats.includes(candidat._id)}
+                    onToggleSelect={handleToggleSelect}
+                  />
+                  {/* Badge de pertinence pour les premiers résultats */}
+                  {hasActiveFilters && index < 3 && !selectionMode && (
+                    <div className="absolute -top-2 -right-2 bg-green-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center shadow-lg z-10">
+                      {index + 1}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </>
         )}
       </div>
