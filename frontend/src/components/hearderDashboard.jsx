@@ -78,11 +78,11 @@ export default function Header({ title, subtitle, onMenuClick, isDashboard = fal
           </div>
         </div>
 
-        <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+        <div className="flex items-center gap-3 sm:gap-2 flex-shrink-0">
           {/* Bouton de notifications avec badge */}
           <button 
             onClick={handleNotificationClick}
-            className="p-1 sm:p-2 rounded hover:bg-gray-100 relative"
+            className="p-2 sm:p-2 rounded hover:bg-gray-100 relative"
             aria-label="Notifications"
             disabled={loading}
           >

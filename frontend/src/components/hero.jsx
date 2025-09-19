@@ -16,7 +16,7 @@ const Hero = () => {
   }, []);
 
   const handleClick = () => {
-    navigate('/login');
+    navigate('/offres'); // redirection vers la page AllOffres
   };
 
   return (
@@ -42,12 +42,10 @@ const Hero = () => {
         <div className="bg-white bg-opacity-70 backdrop-blur-md rounded-xl p-8 md:p-12 shadow-lg max-w-xl text-[#094363] space-y-6">
           <h1 className="text-3xl md:text-5xl font-extrabold leading-tight">
             Postulez facilement et suivez chaque étape de votre recrutement.
- <br className="hidden md:block" />
-            
+            <br className="hidden md:block" />
           </h1>
           <p className="text-lg md:text-xl">
             Une plateforme professionnelle dédiée à votre candidature, du dépôt au résultat final.
-
           </p>
           <button
             onClick={handleClick}
