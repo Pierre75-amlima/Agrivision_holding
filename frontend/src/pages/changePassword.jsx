@@ -30,7 +30,7 @@ export default function ChangePassword() {
 
     setLoading(true);
     try {
-      const res = await authfetch(`https://agrivision-holding.onrender.com/api/auth/change-password`, {
+      const res = await authFetch(`https://agrivision-holding.onrender.com/api/auth/change-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ oldPassword, newPassword }),
