@@ -431,7 +431,7 @@ export default function Candidatures() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Poste visé
-                    <span className="text-xs text-green-600 ml-1">(recherche flexible)</span>
+                    <span className="text-xs text-green-600 ml-1"></span>
                   </label>
                   <input
                     type="text"
@@ -440,9 +440,9 @@ export default function Candidatures() {
                     onChange={(e) => setDraftField("poste", e.target.value)}
                     className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-[#094363] focus:ring-4 focus:ring-[#094363]/10 transition-all duration-200 text-sm sm:text-base"
                   />
-                  <p className="text-xs text-gray-500 mt-1">
+                  {/* <p className="text-xs text-gray-500 mt-1">
                     Trouve automatiquement les variations (management → manager)
-                  </p>
+                  </p> */}
                 </div>
 
                 <div className="sm:col-span-2 lg:col-span-1">
@@ -635,7 +635,7 @@ export default function Candidatures() {
 
             {/* Filtres rapides */}
             <div className="flex flex-wrap gap-2">
-              <button
+              {/* <button
                 onClick={() => onQuickFilter('statut', filters.statut === 'En attente' ? '' : 'En attente')}
                 className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                   filters.statut === 'En attente'
@@ -664,7 +664,7 @@ export default function Candidatures() {
                 }`}
               >
                 Rejetés
-              </button>
+              </button> */}
             </div>
           </div>
         </div>
