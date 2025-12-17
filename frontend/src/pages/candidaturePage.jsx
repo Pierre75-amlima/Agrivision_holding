@@ -145,15 +145,21 @@ export default function CandidaturePage() {
       } else {
         const testData = await testRes.json();
         if (testData && testData._id) {
-          navigate(`/testResults/${testData.offreId._id}`);
+          setStatusMessage({
+            type: 'success',
+            text: "Candidature soumise avec succès ! Redirection vers le test..."
+          });
+          setTimeout(() => {
+            navigate(`/testResults/${testData.offreId._id}`);
+          }, 2000);
         } else {
           setStatusMessage({
-            type: 'info',
-            text: "Votre candidature a été enregistrée. Aucun test n'est requis pour ce poste."
+            type: 'success',
+            text: "Votre candidature a été enregistrée avec succès ! Redirection vers les informations complémentaires..."
           });
           setTimeout(() => {
             navigate(`/infoPosteEntretien/${body._id}`);
-          }, 3000);
+          }, 2000);
         }
       }
 
@@ -226,7 +232,7 @@ export default function CandidaturePage() {
                     <input
                       type={field === 'email' ? 'email' : 'text'}
                       name={field}
-                      id={field}CD 
+                      id={field}
                       value={formData[field]}
                       readOnly
                       className="w-full p-3 sm:p-4 border-2 border-gray-200 rounded-xl bg-gray-50 cursor-not-allowed text-gray-600 font-medium"

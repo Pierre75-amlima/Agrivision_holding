@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function OffreCard({ offre, onPostulerClick }) {
+export default function OffreCard({ offre, onPostulerClick, hasApplied }) {
   // Si dateLimite existe → format FR, sinon "Non définie"
   const dateLimite = offre.dateLimite
     ? new Date(offre.dateLimite).toLocaleDateString('fr-FR')
@@ -29,14 +29,16 @@ export default function OffreCard({ offre, onPostulerClick }) {
           </span>
         </div>
 
-        <button
-          onClick={() => onPostulerClick(offre._id)}
-          className="mt-5 w-full bg-gradient-to-r from-[#094363] to-blue-800 text-white
-                     py-2 rounded shadow-md hover:from-blue-900 hover:to-[#094363]
-                     transition-all duration-300 font-semibold"
-        >
-          Postuler
-        </button>
+        {!hasApplied && (
+          <button
+            onClick={() => onPostulerClick(offre._id)}
+            className="mt-5 w-full bg-gradient-to-r from-[#094363] to-blue-800 text-white
+                       py-2 rounded shadow-md hover:from-blue-900 hover:to-[#094363]
+                       transition-all duration-300 font-semibold"
+          >
+            Postuler
+          </button>
+        )}
       </div>
     </div>
   );

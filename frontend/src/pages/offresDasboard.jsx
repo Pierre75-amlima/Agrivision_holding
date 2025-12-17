@@ -4,7 +4,7 @@ import { useAuth } from "../contexts/authContext";
 import { useNavigate } from "react-router-dom";
 
 export default function Offres() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const navigate = useNavigate();
 
   const [offres, setOffres] = useState([]);
@@ -142,6 +142,11 @@ export default function Offres() {
 
   return (
     <div className="space-y-4 px-2 sm:px-4 py-6 max-w-6xl mx-auto relative">
+      {/* Debug info */}
+      <div className="bg-yellow-100 p-2 rounded text-sm text-yellow-800 mb-4">
+        Debug: Rôle utilisateur = {user?.role || 'Non défini'}, Token présent = {token ? 'Oui' : 'Non'}
+      </div>
+
       {/* Pop-up notification */}
       {notification && (
         <div className="fixed inset-0 flex items-start justify-center z-50 pointer-events-none">

@@ -177,13 +177,6 @@ export default function InfoPostEntretien() {
     setFormData((prev) => ({ ...prev, signature: "" }));
   };
 
-  const saveSignature = () => {
-    if (sigPadRef.current.isEmpty()) return null;
-    const dataURL = sigPadRef.current.toDataURL();
-    setFormData((prev) => ({ ...prev, signature: dataURL }));
-    return dataURL;
-  };
-
   // 🔹 Popup de succès
   const handleSuccessClose = () => {
     setShowSuccessPopup(false);
@@ -289,10 +282,10 @@ export default function InfoPostEntretien() {
           {/* Indicateur de chargement des données */}
           {dataLoading && (
             <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-              <p className="text-sm text-blue-600 flex items-center">
+              <div className="text-sm text-blue-600 flex items-center">
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
                 Récupération de vos informations précédentes...
-              </p>
+              </div>
             </div>
           )}
           

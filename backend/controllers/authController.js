@@ -103,3 +103,45 @@ export const changePassword = async (req, res) => {
     res.status(500).json({ message: 'Erreur serveur lors de la mise à jour du mot de passe.' });
   }
 };
+
+// Créer un administrateur (route temporaire pour setup)
+export const createAdmin = async (req, res) => {
+  try {
+    const { nom, prenoms, email, motDePasse } = req.body;
+
+    // Vérifie si l’email est déjà utilisé
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ message: 'Cet email est déjà utilisé.' });
+    }
+
+    // Hasher le mot de passe
+    const hashedPassword = await bcrypt.hash(motDePasse, 10);
+
+    // Créer un nouvel administrateur
+    const newAdmin = new User({
+      nom,
+      prenoms,
+      email,
+      motDePasse: hashedPassword,
+      role: 'admin',
+      mustChangePassword: true
+    });
+
+    await newAdmin.save();
+
+    res.status(201).json({
+      message: 'Administrateur créé avec succès.',
+      user: {
+        id: newAdmin._id,
+        nom: newAdmin.nom,
+        prenoms: newAdmin.prenoms,
+        email: newAdmin.email,
+        role: newAdmin.role
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erreur serveur lors de la création de l’administrateur.' });
+  }
+};

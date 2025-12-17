@@ -24,7 +24,7 @@ const AppRoutes = () => {
       <Routes>
         {/* Public */}
         <Route path="/" element={<Home />} />
-        <Route path="/candidature/:offreId" element={<CandidaturePage />} />
+        <Route path="/candidature/:offreId" element={<ProtectedRoute><CandidaturePage /></ProtectedRoute>} />
         <Route path="/offres" element={<AllOffres />} />
         <Route path="/infoPosteEntretien/:candidatureId" element={<InfoPosteEntretien />} />
         <Route path="/testResults/:offreId" element={<TestPage />} />

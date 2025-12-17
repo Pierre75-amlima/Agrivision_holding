@@ -65,7 +65,7 @@ export default function LoginForm({ switchToSignup, onClose, offreId }) {
       }
 
       if (offreId) navigate(`/candidature/${offreId}`);
-      else navigate("/offres");
+      else navigate("/");
     } catch (err) {
       setMessage(err.message || "Erreur serveur");
     } finally {

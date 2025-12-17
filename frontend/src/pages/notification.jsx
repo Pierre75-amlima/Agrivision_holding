@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../contexts/authContext";
+import { useNavigate } from "react-router-dom";
 import {
   Bell,
   CheckCircle,
@@ -14,6 +15,7 @@ import {
 
 export default function Notifications() {
   const { token } = useAuth();
+  const navigate = useNavigate();
 
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -144,11 +146,45 @@ export default function Notifications() {
       markAsRead(notification._id);
     }
 
-    // Afficher le message d'information
-    setShowMessage(true);
-    setTimeout(() => {
-      setShowMessage(false);
-    }, 3000);
+    // Redirection basée sur le type de notification et le contexte
+    const { type, contexte } = notification;
+
+    switch (type) {
+      case "NOUVELLE_CANDIDATURE":
+        if (contexte?.offreId) {
+          navigate(`/offres`);
+        }
+        break;
+
+      case "TEST_TERMINE":
+      case "CANDIDATURE_ACCEPTEE":
+      case "CANDIDATURE_REJETEE":
+      case "ENTRETIEN_PROGRAMME":
+        if (contexte?.candidatureId) {
+          navigate(`/candidatures/${contexte.candidatureId}`);
+        }
+        break;
+
+      case "NOUVEAU_TEST_ASSIGNE":
+      case "RAPPEL_TEST":
+        // Rediriger vers la page des tests admin
+        navigate(`/admin/tests`);
+        break;
+
+      case "DOCUMENT_REQUIS":
+      case "MISE_A_JOUR_PROFIL":
+        // Rediriger vers la page des candidatures admin
+        navigate(`/admin/candidatures`);
+        break;
+
+      default:
+        // Afficher le message d'information pour les types non gérés
+        setShowMessage(true);
+        setTimeout(() => {
+          setShowMessage(false);
+        }, 3000);
+        break;
+    }
   };
 
   const formatDate = (dateString) => {
